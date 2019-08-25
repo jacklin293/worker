@@ -7,7 +7,7 @@ import (
 )
 
 // HACK
-var common chan string
+var Common chan string
 
 type Manager struct {
 	Workers map[string]*Worker
@@ -21,7 +21,7 @@ type Manager struct {
 }
 
 func init() {
-	common := make(chan string)
+	Common = make(chan string)
 }
 
 func (m *Manager) Init() {
@@ -35,6 +35,7 @@ func (m *Manager) Init() {
 		w.Topic = t
 		w.Number = 30 // TODO
 		w.DoneChan = m.DoneChan
+		w.init()
 		m.Workers[t] = &w
 		go m.Receive(t)
 	}
@@ -44,7 +45,8 @@ func (m *Manager) Init() {
 
 func (m *Manager) Receive(t string) {
 	for {
-		body := <-common
+		body := <-Common
+		fmt.Println("Receive: " + body)
 		var j Job
 		if err := json.Unmarshal([]byte(body), &j.Desc); err != nil {
 			fmt.Printf("Wrong job format: %s", body)
@@ -65,5 +67,6 @@ func (m *Manager) Done() {
 }
 
 func (m *Manager) Register(j *Job) {
-	m.Workers[j.Topic].Jobs[j.Desc.Name] = j
+	fmt.Printf("Register %s.%s\n", j.Topic, j.Desc.Name)
+	m.Workers[j.Topic].JobNames[j.Desc.Name] = j
 }

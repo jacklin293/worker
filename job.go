@@ -4,21 +4,14 @@ import (
 	"time"
 )
 
-type Process interface {
-	Validate(string) error
-
-	Do(string) error
-	Fail(error) error
-	Succeed() error
-	Done() error
-
-	process()
-	done()
-}
-
 type Job struct {
 	Desc  Descriptor
 	Topic string
+
+	Do      func(*Job) error
+	Fail    func(*Job, error)
+	Succeed func(*Job)
+	Done    func(*Job)
 
 	ReceivedAt time.Time
 	DidAt      time.Time
@@ -49,7 +42,7 @@ type Descriptor struct {
 
 	// Task body of task
 	// TODO map[string]interface{} or string
-	Payload interface{} `json:"payload"`
+	Payload string `json:"payload"`
 
 	// TODO
 	RetryTimes int `json:"retry_times"`
@@ -78,16 +71,17 @@ func (j *Job) process() {
 		}
 	}(j)
 	j.DidAt = time.Now()
-	err := j.Do(j.Desc.Payload)
+	err := j.Do(j)
 	if err != nil {
 		j.FailedAt = time.Now()
 		// FIXME ? if j.Fail != nil
-		j.Fail(err)
+		j.Fail(j, err)
 	} else {
-		j.Succeed()
+		j.Succeed(j)
 	}
-	j.done()
+	j.Done(j)
 	j.DoneAt = time.Now()
+	j.done()
 }
 
 func (j *Job) done() {

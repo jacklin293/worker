@@ -5,13 +5,15 @@ import "fmt"
 type Worker struct {
 	Topic string
 
-	Jobs map[string]*Job
+	JobNames map[string]*Job
 
 	Number int
 
+	// TODO
+	Validate func(string) error
+
 	ReceivedChan chan *Job
 	DoneChan     chan *Job
-	Names        map[string]*Job
 	Status       map[int]*Job
 
 	// TODO Log *logrus.Entry
@@ -20,7 +22,7 @@ type Worker struct {
 
 func (w *Worker) init() {
 	w.ReceivedChan = make(chan *Job)
-	w.Names = make(map[string]*Job)
+	w.JobNames = make(map[string]*Job)
 	w.Status = make(map[int]*Job, w.Number)
 
 	for i := 0; i < w.Number; i++ {
@@ -42,7 +44,13 @@ func (w *Worker) allocate(i int, j *Job) {
 			w.DoneChan <- j
 		}
 	}(j)
+
+	j.Do = w.JobNames[j.Desc.Name].Do
+	j.Fail = w.JobNames[j.Desc.Name].Fail
+	j.Succeed = w.JobNames[j.Desc.Name].Succeed
+	j.Done = w.JobNames[j.Desc.Name].Done
+
 	w.Status[i] = j
-	j.Do()
+	j.process()
 	delete(w.Status, i)
 }
