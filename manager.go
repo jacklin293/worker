@@ -3,11 +3,12 @@ package worker
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"time"
 )
 
-// HACK
-var Common chan string
+// FIXME
+var Queue chan string
 
 type Manager struct {
 	Workers map[string]*Worker
@@ -18,15 +19,24 @@ type Manager struct {
 		VisibleChan chan *Job
 	}
 	DoneChan chan *Job
+
+	// TODO
+	Log *io.Writer
 }
 
 func init() {
-	Common = make(chan string)
+	// FIXME
+	Queue = make(chan string)
 }
 
 func (m *Manager) Init() {
 	m.Workers = make(map[string]*Worker)
 	m.DoneChan = make(chan *Job)
+
+	// TODO Validate
+	if len(m.Topics) == 0 {
+		panic("Please pass 1 topic at least")
+	}
 
 	for _, t := range m.Topics {
 		// New worker
@@ -40,17 +50,19 @@ func (m *Manager) Init() {
 		go m.Receive(t)
 	}
 	go m.Done()
-
 }
 
+// TODO SQS Receive should be in package
 func (m *Manager) Receive(t string) {
 	for {
-		body := <-Common
-		fmt.Println("Receive: " + body)
+		body := <-Queue
 		var j Job
 		if err := json.Unmarshal([]byte(body), &j.Desc); err != nil {
-			fmt.Printf("Wrong job format: %s", body)
+			fmt.Printf("Wrong job format: %s\n", body)
+			// TODO Remove msg from queue
 		}
+		fmt.Println("Receive: " + body)
+
 		j.Topic = t
 		j.ReceivedAt = time.Now()
 		m.Workers[t].ReceivedChan <- &j
@@ -62,11 +74,23 @@ func (m *Manager) Done() {
 		j := <-m.DoneChan
 		j.DoneAt = time.Now()
 		j.Duration = j.DoneAt.Sub(j.ReceivedAt)
-		fmt.Printf("Job done, Duration: %.1fs, Topic: %s, Name: %s, ID: %s\n", j.Duration.Seconds(), j.Topic, j.Desc.Name, j.Desc.ID)
+		fmt.Printf("Job done, Duration: %.1fs, Topic: %s, Type: %s, ID: %s\n", j.Duration.Seconds(), j.Topic, j.Desc.Type, j.Desc.ID)
 	}
 }
 
+// TODO validation
+// Do(), topic, jobtype
 func (m *Manager) Register(j *Job) {
-	fmt.Printf("Register %s.%s\n", j.Topic, j.Desc.Name)
-	m.Workers[j.Topic].JobNames[j.Desc.Name] = j
+	fmt.Printf("Register %s[%s]\n", j.Topic, j.Desc.Type)
+	// FIXME
+	// validate do()
+	if j.Topic == "" || j.Desc.Type == "" {
+
+	}
+	m.Workers[j.Topic].JobTypes[j.Desc.Type] = j
+}
+
+// TODO
+func (m *Manager) JobTypes() {
+
 }

@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"io"
 	"time"
 )
 
@@ -29,16 +30,17 @@ type Job struct {
 	DoneChan chan *Job
 
 	// TODO Config
-	// TODO Log *logrus.Entry
+	// TODO
+	Log *io.Writer
 }
 
 type Descriptor struct {
 	// UUID V4
-	ID string `json:"task_id"`
+	ID string `json:"id"`
 
-	// Job name
+	// Job type
 	// e.g. transactions_backup
-	Name string `json:"name"` // e.g. curl
+	Type string `json:"type"` // e.g. curl
 
 	// Task body of task
 	// TODO map[string]interface{} or string
@@ -47,14 +49,8 @@ type Descriptor struct {
 	// TODO
 	RetryTimes int `json:"retry_times"`
 
-	// Where does this task come frome
-	// e.g. api:10.1.2.219
-	From string `json:"from"`
-
-	// When does this task being enqueued
-	// format: RFC3339
-	// e.g. 2017-02-14T06:59:21Z
-	EnqueuedAt time.Time `json:"enqueued_at"`
+	// TODO
+	App interface{}
 
 	// TODO
 	SQS struct {
@@ -75,11 +71,17 @@ func (j *Job) process() {
 	if err != nil {
 		j.FailedAt = time.Now()
 		// FIXME ? if j.Fail != nil
-		j.Fail(j, err)
+		if j.Fail != nil {
+			j.Fail(j, err)
+		}
 	} else {
-		j.Succeed(j)
+		if j.Succeed != nil {
+			j.Succeed(j)
+		}
 	}
-	j.Done(j)
+	if j.Done != nil {
+		j.Done(j)
+	}
 	j.DoneAt = time.Now()
 	j.done()
 }
