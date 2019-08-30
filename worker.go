@@ -9,7 +9,7 @@ type Worker struct {
 	// FIXME nameing  Topic to Queue
 	Topic string
 
-	JobTypes map[string]*Job
+	JobTypes map[string]JobBehaviour
 
 	Number int
 
@@ -26,7 +26,7 @@ type Worker struct {
 
 func (w *Worker) init() {
 	w.ReceivedChan = make(chan *Job)
-	w.JobTypes = make(map[string]*Job)
+	w.JobTypes = make(map[string]JobBehaviour)
 	w.Status = make(map[int]*Job, w.Number)
 
 	for i := 0; i < w.Number; i++ {
@@ -44,14 +44,9 @@ func (w *Worker) allocate(i int) {
 		}
 	}()
 
-	// TODO Pointer helps?
-	j.Do = w.JobTypes[j.Desc.Type].Do
-	j.Fail = w.JobTypes[j.Desc.Type].Fail
-	j.Succeed = w.JobTypes[j.Desc.Type].Succeed
-	j.Done = w.JobTypes[j.Desc.Type].Done
 	j.DoneChan = w.DoneChan
 
 	w.Status[i] = j
-	j.process()
+	j.process(w.JobTypes[j.Desc.Type])
 	delete(w.Status, i)
 }

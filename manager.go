@@ -78,19 +78,22 @@ func (m *Manager) Done() {
 	}
 }
 
-// TODO validation
-// Do(), topic, jobtype
-func (m *Manager) Register(j *Job) {
-	fmt.Printf("Register %s[%s]\n", j.Topic, j.Desc.Type)
-	// FIXME
+// Register job type
+func (m *Manager) Register(j JobBehaviour, topic string, jobType string) {
 	// validate do()
-	if j.Topic == "" || j.Desc.Type == "" {
-
+	if topic == "" || jobType == "" {
+		panic("Either of topic and job type cannot be empty")
 	}
-	m.Workers[j.Topic].JobTypes[j.Desc.Type] = j
+	m.Workers[topic].JobTypes[jobType] = j
+	return
 }
 
-// TODO
-func (m *Manager) JobTypes() {
-
+func (m *Manager) JobTypes() (mm map[string]string) {
+	mm = make(map[string]string)
+	for t, w := range m.Workers {
+		for typ, _ := range w.JobTypes {
+			mm[t] = typ
+		}
+	}
+	return
 }
