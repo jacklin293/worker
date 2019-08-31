@@ -64,7 +64,7 @@ func New(topics []Topic) (*manager, error) {
 func (m *manager) receive(t string) {
 	var err error
 	for {
-		body := <-Queue
+		body := <-Queue // TODO Received
 		var j Job
 		if err = json.Unmarshal([]byte(body), &j.Desc); err != nil {
 			log.Printf("Wrong job format: %s\n", body)
