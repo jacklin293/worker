@@ -2,26 +2,30 @@ package worker
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
+	"reflect"
 	"time"
 )
 
 // FIXME
 var Queue chan string
 
-type Manager struct {
-	Workers map[string]*Worker
-	Topics  []string
+// ProjectName
+type manager struct {
+	workers map[string]*worker
+	topics  []Topic
 
 	// TODO
-	SQS struct {
+	sqs struct {
 		VisibleChan chan *Job
 	}
-	DoneChan chan *Job
+	doneChan chan *Job
 
 	// TODO
-	Log *io.Writer
+	log *io.Writer
 }
 
 func init() {
@@ -29,70 +33,93 @@ func init() {
 	Queue = make(chan string)
 }
 
-func (m *Manager) Init() {
-	m.Workers = make(map[string]*Worker)
-	m.DoneChan = make(chan *Job)
+func New(topics []Topic) (*manager, error) {
+	var m manager
+	m.topics = topics
+	m.workers = make(map[string]*worker)
+	m.doneChan = make(chan *Job)
 
 	// TODO Validate
-	if len(m.Topics) == 0 {
-		panic("Please pass 1 topic at least")
+	if len(topics) == 0 {
+		return nil, errors.New("Cannot be initialised with no topic")
 	}
 
-	for _, t := range m.Topics {
+	for _, t := range topics {
+		if err := t.validate(); err != nil {
+			return nil, err
+		}
+
 		// New worker
-		var w Worker
-		// TODO concurrency
-		w.Topic = t
-		w.Number = 30 // TODO
-		w.DoneChan = m.DoneChan
-		w.init()
-		m.Workers[t] = &w
-		go m.Receive(t)
+		w := newWorker(t.Name, t.WorkerNumber)
+		w.doneChan = m.doneChan
+		w.run()
+		m.workers[t.Name] = &w
+		go m.receive(t.Name)
 	}
-	go m.Done()
+	go m.done()
+	return &m, nil
 }
 
 // TODO SQS Receive should be in package
-func (m *Manager) Receive(t string) {
+func (m *manager) receive(t string) {
+	var err error
 	for {
 		body := <-Queue
 		var j Job
-		if err := json.Unmarshal([]byte(body), &j.Desc); err != nil {
-			fmt.Printf("Wrong job format: %s\n", body)
+		if err = json.Unmarshal([]byte(body), &j.Desc); err != nil {
+			log.Printf("Wrong job format: %s\n", body)
 			// TODO Remove msg from queue
+			continue
 		}
+		if err = j.validate(); err != nil {
+			log.Printf("Wrong job format: %s\n", body)
+			// TODO Remove msg from queue
+			continue
+		}
+		// FIXME
 		fmt.Println("Receive: " + body)
 
 		j.Topic = t
-		j.ReceivedAt = time.Now()
-		m.Workers[t].ReceivedChan <- &j
+		j.receivedAt = time.Now()
+		m.workers[t].receivedChan <- &j
 	}
 }
 
-func (m *Manager) Done() {
+func (m *manager) done() {
 	for {
-		j := <-m.DoneChan
-		j.DoneAt = time.Now()
-		j.Duration = j.DoneAt.Sub(j.ReceivedAt)
-		fmt.Printf("Job done, Duration: %.1fs, Topic: %s, Type: %s, ID: %s\n", j.Duration.Seconds(), j.Topic, j.Desc.Type, j.Desc.ID)
+		j := <-m.doneChan
+		j.doneAt = time.Now()
+		j.duration = j.doneAt.Sub(j.receivedAt)
+		fmt.Printf("Job done, Duration: %.1fs, Topic: %s, Type: %s, ID: %s\n", j.duration.Seconds(), j.Topic, j.Desc.JobType, j.Desc.JobID)
 	}
 }
 
 // Register job type
-func (m *Manager) Register(j JobBehaviour, topic string, jobType string) {
-	// validate do()
-	if topic == "" || jobType == "" {
-		panic("Either of topic and job type cannot be empty")
+func (m *manager) Register(j JobBehaviour, topicName string, jobType string) (err error) {
+	if topicName == "" || jobType == "" {
+		return errors.New("Both topic and job type cannot be empty")
 	}
-	m.Workers[topic].JobTypes[jobType] = j
+	if reflect.ValueOf(j).Kind() == reflect.Ptr {
+		return fmt.Errorf("Do not use pointer for registering a job '%s'\n", jobType)
+	}
+	// Prevent panic from topics which are not in the list
+	if _, ok := m.workers[topicName]; !ok {
+		w := newWorker(topicName, 0)
+		m.workers[topicName] = &w
+	}
+	m.workers[topicName].jobTypes[jobType] = j
 	return
 }
 
-func (m *Manager) JobTypes() (mm map[string]string) {
-	mm = make(map[string]string)
-	for t, w := range m.Workers {
-		for typ, _ := range w.JobTypes {
-			mm[t] = typ
+func (m *manager) GetTopics() []Topic {
+	return m.topics
+}
+
+func (m *manager) GetJobTypes() (mm map[string][]string) {
+	mm = make(map[string][]string)
+	for t, w := range m.workers {
+		for typ, _ := range w.jobTypes {
+			mm[t] = append(mm[t], typ)
 		}
 	}
 	return

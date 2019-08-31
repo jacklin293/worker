@@ -1,52 +1,72 @@
 package worker
 
 import (
+	"errors"
 	"fmt"
 	"io"
 )
 
-type Worker struct {
+type worker struct {
 	// FIXME nameing  Topic to Queue
-	Topic string
-
-	JobTypes map[string]JobBehaviour
-
-	Number int
-
-	// TODO
-	Validate func(string) error
-
-	ReceivedChan chan *Job
-	DoneChan     chan *Job
-	Status       map[int]*Job
+	topic        string
+	jobTypes     map[string]JobBehaviour
+	number       int
+	receivedChan chan *Job
+	doneChan     chan *Job
+	status       map[int]*Job
 
 	// TODO
-	Log *io.Writer
+	log *io.Writer
 }
 
-func (w *Worker) init() {
-	w.ReceivedChan = make(chan *Job)
-	w.JobTypes = make(map[string]JobBehaviour)
-	w.Status = make(map[int]*Job, w.Number)
+type Topic struct {
+	Name         string
+	WorkerNumber int
+	Endpoint     string
+}
 
-	for i := 0; i < w.Number; i++ {
+func newWorker(t string, n int) worker {
+	return worker{
+		topic:        t,
+		number:       n,
+		receivedChan: make(chan *Job),
+		jobTypes:     make(map[string]JobBehaviour),
+		status:       make(map[int]*Job, n),
+	}
+}
+
+func (w *worker) run() {
+	for i := 0; i < w.number; i++ {
 		go w.allocate(i)
 	}
 }
 
-func (w *Worker) allocate(i int) {
-	j := <-w.ReceivedChan
+func (w *worker) allocate(i int) {
+	j := <-w.receivedChan
 	defer func() {
 		if e := recover(); e != nil {
 			fmt.Printf("Worker recover) error may be caused by undefined job type. err: %v, job description: %+v\n", e, j.Desc)
 			// FIXME
-			w.DoneChan <- j
+			w.doneChan <- j
 		}
 	}()
 
-	j.DoneChan = w.DoneChan
+	j.doneChan = w.doneChan
 
-	w.Status[i] = j
-	j.process(w.JobTypes[j.Desc.Type])
-	delete(w.Status, i)
+	w.status[i] = j
+	j.process(w.jobTypes[j.Desc.JobType])
+	delete(w.status, i)
+}
+
+func (t *Topic) validate() (err error) {
+	if t.Name == "" {
+		return errors.New("Topic name cannot be empty")
+	}
+	if t.WorkerNumber == 0 {
+		return fmt.Errorf("Topic '%s' worker number cannot be 0", t.Name)
+	}
+	if t.Endpoint == "" {
+		return fmt.Errorf("Topic '%s' endpoint cannot be empty", t.Name)
+	}
+	return
 }
