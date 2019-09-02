@@ -43,21 +43,26 @@ func New(topics []Topic) (*manager, error) {
 	if len(topics) == 0 {
 		return nil, errors.New("Cannot be initialised with no topic")
 	}
-
 	for _, t := range topics {
 		if err := t.validate(); err != nil {
 			return nil, err
 		}
+	}
+	return &m, nil
+}
 
+func (m *manager) Run() {
+	for _, t := range m.topics {
 		// New worker
 		w := newWorker(t.Name, t.WorkerNumber)
 		w.doneChan = m.doneChan
 		w.run()
 		m.workers[t.Name] = &w
+
+		// Receive messages
 		go m.receive(t.Name)
 	}
 	go m.done()
-	return &m, nil
 }
 
 // TODO SQS Receive should be in package
@@ -91,7 +96,15 @@ func (m *manager) done() {
 		j.doneAt = time.Now()
 		j.duration = j.doneAt.Sub(j.receivedAt)
 		fmt.Printf("Job done, Duration: %.1fs, Topic: %s, Type: %s, ID: %s\n", j.duration.Seconds(), j.Topic, j.Desc.JobType, j.Desc.JobID)
+		if j.Done != nil {
+			j.Done()
+		}
 	}
+}
+
+// For mocking purpose
+func (m *manager) setDoneChan(ch chan *Job) {
+	m.doneChan = ch
 }
 
 // Register job type

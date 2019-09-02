@@ -18,6 +18,7 @@ type Job struct {
 	Log *io.Writer
 
 	doneChan chan *Job
+	Done     func() // For job report
 
 	receivedAt time.Time
 	didAt      time.Time
