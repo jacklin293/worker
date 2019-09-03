@@ -33,13 +33,14 @@ func init() {
 	Queue = make(chan string)
 }
 
+// FIXME param should be a path of config (how to mock it?)
 func New(topics []Topic) (*manager, error) {
 	var m manager
 	m.topics = topics
 	m.workers = make(map[string]*worker)
 	m.doneChan = make(chan *Job)
 
-	// TODO Validate
+	// Config validation
 	if len(topics) == 0 {
 		return nil, errors.New("Cannot be initialised with no topic")
 	}
@@ -93,12 +94,9 @@ func (m *manager) receive(t string) {
 func (m *manager) done() {
 	for {
 		j := <-m.doneChan
-		j.doneAt = time.Now()
-		j.duration = j.doneAt.Sub(j.receivedAt)
 		fmt.Printf("Job done, Duration: %.1fs, Topic: %s, Type: %s, ID: %s\n", j.duration.Seconds(), j.Topic, j.Desc.JobType, j.Desc.JobID)
-		if j.Done != nil {
-			j.Done()
-		}
+
+		// TODO Graceful shutdown
 	}
 }
 

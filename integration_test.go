@@ -18,7 +18,6 @@ type TestJob struct {
 // Test register + getJobTypes
 
 func TestWorker(t *testing.T) {
-	t.Skip()
 	// New manager
 	topic := Topic{
 		Name:         "test-topic-1",
@@ -29,14 +28,13 @@ func TestWorker(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	m.Run()
 
 	// Initialise job
-	var j JobBehaviour = TestJob{}
+	var j = TestJob{}
 	m.Register(j, "test-topic-1", "test-job_type-1")
 	m.Register(j, "test-topic-2", "test-job_type-1")
 	m.Register(j, "test-topic-2", "test-job_type-2")
-
-	// Enqueue a message
 
 	// FIXME Enqueue
 	Queue <- string(newMessage("1"))
@@ -73,5 +71,5 @@ func (tj TestJob) Run(j *Job) {
 func (tj *TestJob) dd(j *Job) {
 	tj.Now = time.Now().Unix()
 	j.Desc.Payload = fmt.Sprintf("rand num: %d", rand.Intn(100))
-	// fmt.Printf("JobID: %s, JobPayload: '%s', now: %d changed by dd\n", j.Desc.JobID, j.Desc.Payload, tj.Now)
+	fmt.Printf("JobID: %s, JobPayload: '%s', now: %d changed by dd\n", j.Desc.JobID, j.Desc.Payload, tj.Now)
 }

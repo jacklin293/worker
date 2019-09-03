@@ -18,7 +18,6 @@ type Job struct {
 	Log *io.Writer
 
 	doneChan chan *Job
-	Done     func() // For job report
 
 	receivedAt time.Time
 	didAt      time.Time
@@ -80,9 +79,11 @@ func (j *Job) process(jb JobBehaviour) {
 	j.didAt = time.Now()
 	jb.Run(j)
 	j.doneAt = time.Now()
-	j.done()
+	j.done(jb)
 }
 
-func (j *Job) done() {
+func (j *Job) done(jb JobBehaviour) {
+	j.doneAt = time.Now()
+	j.duration = j.doneAt.Sub(j.receivedAt)
 	j.doneChan <- j
 }
