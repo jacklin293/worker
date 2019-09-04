@@ -3,7 +3,6 @@ package worker
 import (
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -29,26 +28,6 @@ func TestNewAndGetTopics(t *testing.T) {
 			assert.Equal(t, tc.topics, m.GetTopics())
 		}
 	}
-}
-
-func TestReceive(t *testing.T) {
-	t.Skip()
-}
-
-// FIXME
-func TestDone(t *testing.T) {
-	t.Skip()
-	t.Parallel()
-	m, _ := New([]Topic{Topic{"test-topic-1", 1, "foo"}})
-	var j = Job{
-		receivedAt: time.Now().Add(-5 * time.Second),
-	}
-	ch := make(chan *Job)
-	m.setDoneChan(ch)
-	go m.done() // FIXME should be closed
-	ch <- &j
-	assert.Equal(t, 5, int(j.doneAt.Sub(j.receivedAt).Seconds()))
-	assert.Equal(t, 5, int(j.duration.Seconds()))
 }
 
 func TestRegister(t *testing.T) {

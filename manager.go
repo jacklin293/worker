@@ -13,10 +13,28 @@ import (
 // FIXME
 var Queue chan string
 
+type managerConfig struct {
+	Env        EnvConfig
+	Containers []ContainerConfig
+}
+
+type EnvConfig struct {
+	Env string
+}
+
+type ContainerConfig struct {
+	Name        string
+	Provider    string
+	Endpoint    string
+	Source      string
+	Concurrency int
+	Enabled     bool
+}
+
 // ProjectName
 type manager struct {
 	workers map[string]*worker
-	topics  []Topic
+	config  *managerConfig
 
 	// TODO
 	sqs struct {
@@ -33,41 +51,58 @@ func init() {
 	Queue = make(chan string)
 }
 
-// FIXME param should be a path of config (how to mock it?)
-func New(topics []Topic) (*manager, error) {
+func New() (*manager, error) {
 	var m manager
-	m.topics = topics
 	m.workers = make(map[string]*worker)
 	m.doneChan = make(chan *Job)
-
-	// Config validation
-	if len(topics) == 0 {
-		return nil, errors.New("Cannot be initialised with no topic")
-	}
-	for _, t := range topics {
-		if err := t.validate(); err != nil {
-			return nil, err
-		}
-	}
 	return &m, nil
 }
 
+// Initialisation with config file
+func (m *manager) SetConfigWithFile(path string) (err error) {
+	// TODO Read config file into config struct
+	// Config validation
+	// if len(configs) == 0 {
+	//	return nil, errors.New("Can not load config")
+	// }
+	// for _, c := range configs {
+	//	if err := c.validate(); err != nil {
+	//		return nil, err
+	//	}
+	// }
+	m.config = &managerConfig{}
+	return
+}
+
+// Initialisation with config in json
+func (m *manager) SetConfigWithJSON(json string) (err error) {
+	// TODO Read json string into config struct
+	m.config = &managerConfig{}
+	return
+}
+
 func (m *manager) Run() {
-	for _, t := range m.topics {
+	if m.config == nil {
+		log.Fatal("Please set config before running")
+	}
+	for _, c := range m.config.Containers {
 		// New worker
-		w := newWorker(t.Name, t.WorkerNumber)
+		w := newWorker(&workerConfig{
+			Env:       m.config.Env,
+			Container: c,
+		})
 		w.doneChan = m.doneChan
 		w.run()
-		m.workers[t.Name] = &w
+		m.workers[c.Name] = &w
 
 		// Receive messages
-		go m.receive(t.Name)
+		go m.receive(&c)
 	}
 	go m.done()
 }
 
 // TODO SQS Receive should be in package
-func (m *manager) receive(t string) {
+func (m *manager) receive(c *ContainerConfig) { // TODO pass config
 	var err error
 	for {
 		body := <-Queue // TODO Received
@@ -85,45 +120,34 @@ func (m *manager) receive(t string) {
 		// FIXME
 		fmt.Println("Receive: " + body)
 
-		j.Topic = t
 		j.receivedAt = time.Now()
-		m.workers[t].receivedChan <- &j
+		m.workers[c.Name].receivedChan <- &j
 	}
 }
 
 func (m *manager) done() {
 	for {
 		j := <-m.doneChan
-		fmt.Printf("Job done, Duration: %.1fs, Topic: %s, Type: %s, ID: %s\n", j.duration.Seconds(), j.Topic, j.Desc.JobType, j.Desc.JobID)
+		fmt.Printf("Job done, Duration: %.1fs, ContainerName: %s, Type: %s, ID: %s\n", j.duration.Seconds(), j.Config.Container.Name, j.Desc.JobType, j.Desc.JobID)
 
 		// TODO Graceful shutdown
 	}
 }
 
-// For mocking purpose
-func (m *manager) setDoneChan(ch chan *Job) {
-	m.doneChan = ch
-}
-
-// Register job type
-func (m *manager) Register(j JobBehaviour, topicName string, jobType string) (err error) {
-	if topicName == "" || jobType == "" {
-		return errors.New("Both topic and job type cannot be empty")
+// New job type
+func (m *manager) NewJobType(j JobBehaviour, containerName string, jobType string) {
+	if containerName == "" || jobType == "" {
+		log.Fatal("Both container name and job type cannot be empty")
 	}
 	if reflect.ValueOf(j).Kind() == reflect.Ptr {
-		return fmt.Errorf("Do not use pointer for registering a job '%s'\n", jobType)
+		log.Fatalf("Do not use pointer for registering a job '%s'\n", jobType)
 	}
-	// Prevent panic from topics which are not in the list
-	if _, ok := m.workers[topicName]; !ok {
-		w := newWorker(topicName, 0)
-		m.workers[topicName] = &w
+	// Prevent from panic due to the fact that container name s not in the list
+	if _, ok := m.workers[containerName]; !ok {
+		w := newWorker(&workerConfig{})
+		m.workers[containerName] = &w
 	}
-	m.workers[topicName].jobTypes[jobType] = j
-	return
-}
-
-func (m *manager) GetTopics() []Topic {
-	return m.topics
+	m.workers[containerName].jobTypes[jobType] = j
 }
 
 func (m *manager) GetJobTypes() (mm map[string][]string) {
@@ -132,6 +156,26 @@ func (m *manager) GetJobTypes() (mm map[string][]string) {
 		for typ, _ := range w.jobTypes {
 			mm[t] = append(mm[t], typ)
 		}
+	}
+	return
+}
+
+func (c *ContainerConfig) validate() (err error) {
+	// TODO only contain a-z, A-Z, -, _   unique name
+	if c.Name == "" {
+		return errors.New("Container config - name cannot be empty")
+	}
+	if c.Provider == "" {
+		return fmt.Errorf("Container config - '%s' provider cannot be empty", c.Name)
+	}
+	if c.Endpoint == "" {
+		return fmt.Errorf("Container config - '%s' endpoint cannot be empty", c.Name)
+	}
+	if c.Source == "" {
+		return fmt.Errorf("Container config - '%s' source cannot be empty", c.Name)
+	}
+	if c.Concurrency == 0 {
+		return fmt.Errorf("Container config - '%s' concurrency cannot be 0", c.Name)
 	}
 	return
 }

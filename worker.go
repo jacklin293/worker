@@ -1,16 +1,19 @@
 package worker
 
 import (
-	"errors"
 	"fmt"
 	"io"
 )
 
+type workerConfig struct {
+	Env       EnvConfig
+	Container ContainerConfig
+}
+
 type worker struct {
-	// FIXME nameing  Topic to Queue
-	topic        string
+	config       *workerConfig
 	jobTypes     map[string]JobBehaviour
-	number       int
+	concurrency  int
 	receivedChan chan *Job
 	doneChan     chan *Job
 	status       map[int]*Job
@@ -19,24 +22,17 @@ type worker struct {
 	log *io.Writer
 }
 
-type Topic struct {
-	Name         string
-	WorkerNumber int
-	Endpoint     string
-}
-
-func newWorker(t string, n int) worker {
+func newWorker(c *workerConfig) worker {
 	return worker{
-		topic:        t,
-		number:       n,
+		config:       c,
 		receivedChan: make(chan *Job),
 		jobTypes:     make(map[string]JobBehaviour),
-		status:       make(map[int]*Job, n),
+		status:       make(map[int]*Job, c.Container.Concurrency),
 	}
 }
 
 func (w *worker) run() {
-	for i := 0; i < w.number; i++ {
+	for i := 0; i < w.config.Container.Concurrency; i++ {
 		go w.allocate(i)
 	}
 }
@@ -52,21 +48,9 @@ func (w *worker) allocate(i int) {
 	}()
 
 	j.doneChan = w.doneChan
+	j.Config = w.config
 
 	w.status[i] = j
 	j.process(w.jobTypes[j.Desc.JobType])
 	delete(w.status, i)
-}
-
-func (t *Topic) validate() (err error) {
-	if t.Name == "" {
-		return errors.New("Topic name cannot be empty")
-	}
-	if t.WorkerNumber == 0 {
-		return fmt.Errorf("Topic '%s' worker number cannot be 0", t.Name)
-	}
-	if t.Endpoint == "" {
-		return fmt.Errorf("Topic '%s' endpoint cannot be empty", t.Name)
-	}
-	return
 }

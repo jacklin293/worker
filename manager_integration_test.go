@@ -73,3 +73,23 @@ func (tj *TestJob) dd(j *Job) {
 	j.Desc.Payload = fmt.Sprintf("rand num: %d", rand.Intn(100))
 	fmt.Printf("JobID: %s, JobPayload: '%s', now: %d changed by dd\n", j.Desc.JobID, j.Desc.Payload, tj.Now)
 }
+
+func TestReceive(t *testing.T) {
+	t.Skip()
+}
+
+// FIXME
+func TestDone(t *testing.T) {
+	t.Skip()
+	// t.Parallel()
+	// m, _ := New([]Topic{Topic{"test-topic-1", 1, "foo"}})
+	// var j = Job{
+	//		receivedAt: time.Now().Add(-5 * time.Second),
+	// }
+	// ch := make(chan *Job)
+	// m.setDoneChan(ch)
+	// go m.done() // FIXME should be closed
+	// ch <- &j
+	// assert.Equal(t, 5, int(j.doneAt.Sub(j.receivedAt).Seconds()))
+	// assert.Equal(t, 5, int(j.duration.Seconds()))
+}

@@ -11,8 +11,8 @@ type JobBehaviour interface {
 }
 
 type Job struct {
-	Desc  Descriptor
-	Topic string
+	Desc   Descriptor
+	Config *workerConfig
 
 	// TODO
 	Log *io.Writer
