@@ -50,11 +50,11 @@ func init() {
 	Queue = make(chan string)
 }
 
-func New() (*manager, error) { // FIXME func should be named as Project name
+func New() *manager { // FIXME func should be named as Project name
 	var m manager
 	m.workers = make(map[string]*worker)
 	m.doneChan = make(chan *Job)
-	return &m, nil
+	return &m
 }
 
 // Initialisation with config file
@@ -135,7 +135,7 @@ func (m *manager) receive(c *ContainerConfig) { // TODO pass config
 			continue
 		}
 		if _, ok := m.workers[c.Name].jobTypes[j.Desc.JobType]; !ok {
-			log.Printf("Job type '%s' is not newed in '%s' \n", j.Desc.JobType, c.Name)
+			log.Printf("Job type '%s' is not initialised for '%s'\n", j.Desc.JobType, c.Name)
 			// TODO Remove msg from queue
 			continue
 		}
@@ -158,12 +158,12 @@ func (m *manager) done() {
 }
 
 // New job type
-func (m *manager) NewJobType(j JobBehaviour, containerName string, jobType string) {
+func (m *manager) InitJobType(j JobBehaviour, containerName string, jobType string) {
 	if containerName == "" || jobType == "" {
 		log.Fatal("Both container name and job type cannot be empty")
 	}
 	if reflect.ValueOf(j).Kind() == reflect.Ptr {
-		log.Fatalf("Do not use pointer for registering a job '%s'\n", jobType)
+		log.Fatalf("Do not use pointer for initialising a job '%s'\n", jobType)
 	}
 	// Prevent from panic due to the fact that container name s not in the list
 	if _, ok := m.workers[containerName]; !ok {
