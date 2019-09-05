@@ -51,7 +51,7 @@ func init() {
 	Queue = make(chan string)
 }
 
-func New() (*manager, error) {
+func New() (*manager, error) { // FIXME func should be named as Project name
 	var m manager
 	m.workers = make(map[string]*worker)
 	m.doneChan = make(chan *Job)
@@ -118,8 +118,14 @@ func (m *manager) receive(c *ContainerConfig) { // TODO pass config
 			// TODO Remove msg from queue
 			continue
 		}
+		if _, ok := m.workers[c.Name].jobTypes[j.Desc.JobType]; !ok {
+			log.Printf("Job type '%s' is not newed in '%s' \n", j.Desc.JobType, c.Name)
+			// TODO Remove msg from queue
+			continue
+		}
+
 		// FIXME
-		fmt.Println("Receive: " + body)
+		log.Println("Receive: " + body)
 
 		j.receivedAt = time.Now()
 		m.workers[c.Name].receivedChan <- &j
@@ -129,7 +135,7 @@ func (m *manager) receive(c *ContainerConfig) { // TODO pass config
 func (m *manager) done() {
 	for {
 		j := <-m.doneChan
-		fmt.Printf("Job done, Duration: %.1fs, ContainerName: %s, Type: %s, ID: %s\n", j.duration.Seconds(), j.Config.Container.Name, j.Desc.JobType, j.Desc.JobID)
+		log.Printf("Job done, ElapsedTime: %.1fs, ContainerName: %s, Type: %s, ID: %s\n", j.elapsedTime.Seconds(), j.Config.Container.Name, j.Desc.JobType, j.Desc.JobID)
 
 		// TODO Graceful shutdown
 	}

@@ -1,8 +1,8 @@
 package worker
 
 import (
-	"fmt"
 	"io"
+	"log"
 )
 
 type workerConfig struct {
@@ -41,8 +41,7 @@ func (w *worker) allocate(i int) {
 	j := <-w.receivedChan
 	defer func() {
 		if e := recover(); e != nil {
-			fmt.Printf("Worker recover) error may be caused by undefined job type. err: %v, job description: %+v\n", e, j.Desc)
-			// FIXME
+			log.Printf("Worker recover) error may be caused by undefined job type. err: %v, job description: %+v\n", e, j.Desc)
 			w.doneChan <- j
 		}
 	}()

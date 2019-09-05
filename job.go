@@ -19,10 +19,10 @@ type Job struct {
 
 	doneChan chan *Job
 
-	receivedAt time.Time
-	didAt      time.Time
-	doneAt     time.Time
-	duration   time.Duration
+	receivedAt  time.Time
+	didAt       time.Time
+	doneAt      time.Time
+	elapsedTime time.Duration
 
 	// [Optional] SQS message description
 	sqs struct {
@@ -84,6 +84,6 @@ func (j *Job) process(jb JobBehaviour) {
 
 func (j *Job) done(jb JobBehaviour) {
 	j.doneAt = time.Now()
-	j.duration = j.doneAt.Sub(j.receivedAt)
+	j.elapsedTime = j.doneAt.Sub(j.receivedAt)
 	j.doneChan <- j
 }
