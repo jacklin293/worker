@@ -14,21 +14,21 @@ import (
 var Queue chan string
 
 type managerConfig struct {
-	Env        EnvConfig
-	Containers []ContainerConfig
+	Env        EnvConfig         `json:"env"`
+	Containers []ContainerConfig `json:"containers"`
 }
 
 type EnvConfig struct {
-	Env string
+	Env string `json:"env"`
 }
 
 type ContainerConfig struct {
-	Name        string
-	Provider    string
-	Endpoint    string
-	Source      string
-	Concurrency int
-	Enabled     bool
+	Name        string `json:"name"`
+	Provider    string `json:"provider"`
+	Endpoint    string `json:"endpoint"`
+	Source      string `json:"source"`
+	Concurrency int    `json:"concurrency"`
+	Enabled     bool   `json:"enabled"`
 }
 
 // ProjectName
@@ -75,10 +75,8 @@ func (m *manager) SetConfigWithFile(path string) (err error) {
 }
 
 // Initialisation with config in json
-func (m *manager) SetConfigWithJSON(json string) (err error) {
-	// TODO Read json string into config struct
-	m.config = &managerConfig{}
-	return
+func (m *manager) SetConfigWithJSON(conf string) (err error) {
+	return json.Unmarshal([]byte(conf), &m.config)
 }
 
 func (m *manager) Run() {
@@ -86,6 +84,9 @@ func (m *manager) Run() {
 		log.Fatal("Please set config before running")
 	}
 	for _, c := range m.config.Containers {
+		// TODO
+		// check validate, if available container is zero, do log.Fatal
+
 		// New worker
 		w := newWorker(&workerConfig{
 			Env:       m.config.Env,
@@ -168,6 +169,7 @@ func (c *ContainerConfig) validate() (err error) {
 	if c.Provider == "" {
 		return fmt.Errorf("Container config - '%s' provider cannot be empty", c.Name)
 	}
+	// FIXME Depends on which container used to decide whether to validate endpoint and source
 	if c.Endpoint == "" {
 		return fmt.Errorf("Container config - '%s' endpoint cannot be empty", c.Name)
 	}
