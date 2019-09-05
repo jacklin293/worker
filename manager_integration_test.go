@@ -1,3 +1,5 @@
+// +build integration
+
 package worker
 
 import (
@@ -25,9 +27,7 @@ func TestWorker(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := m.SetConfigWithJSON(conf); err != nil {
-		log.Fatal(err)
-	}
+	m.SetConfigWithJSON(conf)
 	m.Run()
 
 	// Initialise job

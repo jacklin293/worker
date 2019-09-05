@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"reflect"
 	"time"
@@ -37,13 +36,13 @@ type manager struct {
 	config  *managerConfig
 
 	// TODO
-	sqs struct {
-		VisibleChan chan *Job
-	}
+	// sqs struct {
+	//	VisibleChan chan *Job
+	// }
 	doneChan chan *Job
 
 	// TODO
-	log *io.Writer
+	// log *io.Writer
 }
 
 func init() {
@@ -59,7 +58,7 @@ func New() (*manager, error) { // FIXME func should be named as Project name
 }
 
 // Initialisation with config file
-func (m *manager) SetConfigWithFile(path string) (err error) {
+func (m *manager) SetConfigWithFile(path string) {
 	// TODO Read config file into config struct
 	// Config validation
 	// if len(configs) == 0 {
@@ -71,12 +70,29 @@ func (m *manager) SetConfigWithFile(path string) (err error) {
 	//	}
 	// }
 	m.config = &managerConfig{}
-	return
 }
 
 // Initialisation with config in json
-func (m *manager) SetConfigWithJSON(conf string) (err error) {
-	return json.Unmarshal([]byte(conf), &m.config)
+func (m *manager) SetConfigWithJSON(conf string) {
+	if err := json.Unmarshal([]byte(conf), &m.config); err != nil {
+		log.Fatalf("Failed to parse config in JSON, err: %v\n", err)
+	}
+	if len(m.config.Containers) == 0 {
+		log.Fatal("No container configs")
+	}
+
+	workerEnabled := false
+	for _, c := range m.config.Containers {
+		if err := c.validate(); err != nil {
+			log.Fatal("Config err: ", err)
+		}
+		if c.Enabled {
+			workerEnabled = true
+		}
+	}
+	if !workerEnabled {
+		log.Fatal("None of containers are enabled")
+	}
 }
 
 func (m *manager) Run() {
@@ -160,7 +176,7 @@ func (m *manager) NewJobType(j JobBehaviour, containerName string, jobType strin
 func (m *manager) GetJobTypes() (mm map[string][]string) {
 	mm = make(map[string][]string)
 	for t, w := range m.workers {
-		for typ, _ := range w.jobTypes {
+		for typ := range w.jobTypes {
 			mm[t] = append(mm[t], typ)
 		}
 	}
@@ -170,20 +186,20 @@ func (m *manager) GetJobTypes() (mm map[string][]string) {
 func (c *ContainerConfig) validate() (err error) {
 	// TODO only contain a-z, A-Z, -, _   unique name
 	if c.Name == "" {
-		return errors.New("Container config - name cannot be empty")
+		return errors.New("container name cannot be empty")
 	}
 	if c.Provider == "" {
-		return fmt.Errorf("Container config - '%s' provider cannot be empty", c.Name)
+		return fmt.Errorf("container '%s' provider cannot be empty", c.Name)
 	}
 	// FIXME Depends on which container used to decide whether to validate endpoint and source
-	if c.Endpoint == "" {
-		return fmt.Errorf("Container config - '%s' endpoint cannot be empty", c.Name)
-	}
-	if c.Source == "" {
-		return fmt.Errorf("Container config - '%s' source cannot be empty", c.Name)
-	}
+	// if c.Endpoint == "" {
+	//	return fmt.Errorf("container '%s' endpoint cannot be empty", c.Name)
+	// }
+	// if c.Source == "" {
+	//	return fmt.Errorf("container '%s' source cannot be empty", c.Name)
+	// }
 	if c.Concurrency == 0 {
-		return fmt.Errorf("Container config - '%s' concurrency cannot be 0", c.Name)
+		return fmt.Errorf("container '%s' concurrency cannot be 0", c.Name)
 	}
 	return
 }

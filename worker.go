@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"io"
 	"log"
 )
 
@@ -13,13 +12,12 @@ type workerConfig struct {
 type worker struct {
 	config       *workerConfig
 	jobTypes     map[string]JobBehaviour
-	concurrency  int
 	receivedChan chan *Job
 	doneChan     chan *Job
 	status       map[int]*Job
 
 	// TODO
-	log *io.Writer
+	// log *io.Writer
 }
 
 func newWorker(c *workerConfig) worker {

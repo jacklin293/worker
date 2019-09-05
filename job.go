@@ -2,7 +2,6 @@ package worker
 
 import (
 	"fmt"
-	"io"
 	"time"
 )
 
@@ -15,7 +14,7 @@ type Job struct {
 	Config *workerConfig
 
 	// TODO
-	Log *io.Writer
+	// Log *io.Writer
 
 	doneChan chan *Job
 
@@ -24,12 +23,12 @@ type Job struct {
 	doneAt      time.Time
 	elapsedTime time.Duration
 
-	// [Optional] SQS message description
-	sqs struct {
-		MessageID     string
-		MD5OfBody     string
-		ReceiptHandle string
-	}
+	// TODO [Optional] SQS message description
+	// sqs struct {
+	//	MessageID     string
+	//	MD5OfBody     string
+	//	ReceiptHandle string
+	// }
 }
 
 type Descriptor struct {
