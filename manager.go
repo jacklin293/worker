@@ -40,6 +40,9 @@ type manager struct {
 	//	VisibleChan chan *Job
 	// }
 	doneChan chan *Job
+	// When job is done, notify someone who is interested in.
+	// New() won't initialise it
+	notifyChan chan *Job
 
 	// TODO
 	// log *io.Writer
@@ -135,13 +138,10 @@ func (m *manager) receive(c *ContainerConfig) { // TODO pass config
 			continue
 		}
 		if _, ok := m.workers[c.Name].jobTypes[j.Desc.JobType]; !ok {
-			log.Printf("Job type '%s' is not initialised for '%s'\n", j.Desc.JobType, c.Name)
+			log.Printf("Job type '%s'.'%s' is not initialised\n", c.Name, j.Desc.JobType)
 			// TODO Remove msg from queue
 			continue
 		}
-
-		// FIXME
-		log.Println("Receive: " + body)
 
 		j.receivedAt = time.Now()
 		m.workers[c.Name].receivedChan <- &j
@@ -151,26 +151,29 @@ func (m *manager) receive(c *ContainerConfig) { // TODO pass config
 func (m *manager) done() {
 	for {
 		j := <-m.doneChan
-		log.Printf("Job done, ElapsedTime: %.1fs, ContainerName: %s, Type: %s, ID: %s\n", j.elapsedTime.Seconds(), j.Config.Container.Name, j.Desc.JobType, j.Desc.JobID)
-
+		if m.notifyChan != nil {
+			go func(m *manager, j *Job) {
+				m.notifyChan <- j
+			}(m, j)
+		}
 		// TODO Graceful shutdown
 	}
 }
 
 // New job type
-func (m *manager) InitJobType(j JobBehaviour, containerName string, jobType string) {
+func (m *manager) InitJobType(jb JobBehaviour, containerName string, jobType string) {
 	if containerName == "" || jobType == "" {
 		log.Fatal("Both container name and job type cannot be empty")
 	}
-	if reflect.ValueOf(j).Kind() == reflect.Ptr {
-		log.Fatalf("Do not use pointer for initialising a job '%s'\n", jobType)
+	if reflect.ValueOf(jb).Kind() == reflect.Ptr {
+		log.Fatalf("Can not use pointer for initialising a job '%s'\n", jobType)
 	}
 	// Prevent from panic due to the fact that container name s not in the list
 	if _, ok := m.workers[containerName]; !ok {
 		w := newWorker(&workerConfig{})
 		m.workers[containerName] = &w
 	}
-	m.workers[containerName].jobTypes[jobType] = j
+	m.workers[containerName].jobTypes[jobType] = jb
 }
 
 func (m *manager) GetJobTypes() (mm map[string][]string) {
@@ -181,6 +184,10 @@ func (m *manager) GetJobTypes() (mm map[string][]string) {
 		}
 	}
 	return
+}
+
+func (m *manager) SetNotifyChan(ch chan *Job) {
+	m.notifyChan = ch
 }
 
 func (c *ContainerConfig) validate() (err error) {

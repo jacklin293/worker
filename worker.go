@@ -2,6 +2,7 @@ package worker
 
 import (
 	"log"
+	"sync"
 )
 
 type workerConfig struct {
@@ -15,6 +16,7 @@ type worker struct {
 	receivedChan chan *Job
 	doneChan     chan *Job
 	status       map[int]*Job
+	mutex        sync.RWMutex
 
 	// TODO
 	// log *io.Writer
@@ -31,15 +33,19 @@ func newWorker(c *workerConfig) worker {
 
 func (w *worker) run() {
 	for i := 0; i < w.config.Container.Concurrency; i++ {
-		go w.allocate(i)
+		go func(w *worker, i int) {
+			for {
+				j := <-w.receivedChan
+				w.allocate(i, j)
+			}
+		}(w, i)
 	}
 }
 
-func (w *worker) allocate(i int) {
-	j := <-w.receivedChan
+func (w *worker) allocate(i int, j *Job) {
 	defer func() {
 		if e := recover(); e != nil {
-			log.Printf("Worker recover) error may be caused by undefined job type. err: %v, job description: %+v\n", e, j.Desc)
+			log.Printf("panic: %v, message: %+v\n", e, j.Desc)
 			w.doneChan <- j
 		}
 	}()
@@ -47,7 +53,17 @@ func (w *worker) allocate(i int) {
 	j.doneChan = w.doneChan
 	j.Config = w.config
 
-	w.status[i] = j
+	w.updateStatus(true, i, j)
 	j.process(w.jobTypes[j.Desc.JobType])
-	delete(w.status, i)
+	w.updateStatus(false, i, j)
+}
+
+func (w *worker) updateStatus(b bool, i int, j *Job) {
+	w.mutex.Lock()
+	if b {
+		w.status[i] = j
+	} else {
+		delete(w.status, i)
+	}
+	w.mutex.Unlock()
 }

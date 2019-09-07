@@ -77,12 +77,11 @@ func (j *Job) process(jb JobBehaviour) {
 	}(j)
 	j.didAt = time.Now()
 	jb.Run(j)
-	j.doneAt = time.Now()
-	j.done(jb)
+	j.done()
+	j.doneChan <- j
 }
 
-func (j *Job) done(jb JobBehaviour) {
+func (j *Job) done() {
 	j.doneAt = time.Now()
 	j.elapsedTime = j.doneAt.Sub(j.receivedAt)
-	j.doneChan <- j
 }
