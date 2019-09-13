@@ -9,9 +9,6 @@ import (
 	"time"
 )
 
-// FIXME
-var Queue chan string
-
 type managerConfig struct {
 	Env        EnvConfig         `json:"env"`
 	Containers []ContainerConfig `json:"containers"`
@@ -42,15 +39,11 @@ type manager struct {
 	doneChan chan *Job
 	// When job is done, notify someone who is interested in.
 	// New() won't initialise it
-	notifyChan chan *Job
+	notifyChan  chan *Job
+	receiveChan chan []byte
 
 	// TODO
 	// log *io.Writer
-}
-
-func init() {
-	// FIXME
-	Queue = make(chan string)
 }
 
 func New() *manager { // FIXME func should be named as Project name
@@ -125,9 +118,9 @@ func (m *manager) Run() {
 func (m *manager) receive(c *ContainerConfig) { // TODO pass config
 	var err error
 	for {
-		body := <-Queue // TODO Received
+		body := <-m.receiveChan // TODO Received
 		var j Job
-		if err = json.Unmarshal([]byte(body), &j.Desc); err != nil {
+		if err = json.Unmarshal(body, &j.Desc); err != nil {
 			log.Printf("Wrong job format: %s\n", body)
 			// TODO Remove msg from queue
 			continue
@@ -188,6 +181,12 @@ func (m *manager) GetJobTypes() (mm map[string][]string) {
 
 func (m *manager) SetNotifyChan(ch chan *Job) {
 	m.notifyChan = ch
+}
+
+// FIXME for benchmark temporarily
+func (m *manager) SetReceiveChan(ch chan []byte) {
+	// FIXME
+	m.receiveChan = ch
 }
 
 func (c *ContainerConfig) validate() (err error) {
