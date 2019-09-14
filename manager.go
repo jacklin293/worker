@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"sync"
 	"time"
 )
 
@@ -31,6 +32,7 @@ type ContainerConfig struct {
 type manager struct {
 	workers map[string]*worker
 	config  *managerConfig
+	jobPool *sync.Pool
 
 	// TODO
 	// sqs struct {
@@ -50,6 +52,11 @@ func New() *manager { // FIXME func should be named as Project name
 	var m manager
 	m.workers = make(map[string]*worker)
 	m.doneChan = make(chan *Job)
+	m.jobPool = &sync.Pool{
+		New: func() interface{} {
+			return &Job{}
+		},
+	}
 	return &m
 }
 
@@ -119,7 +126,8 @@ func (m *manager) receive(c *ContainerConfig) { // TODO pass config
 	var err error
 	for {
 		body := <-m.receiveChan // TODO Received
-		var j Job
+		j := m.jobPool.Get().(*Job)
+		defer m.jobPool.Put(j)
 		if err = json.Unmarshal(body, &j.Desc); err != nil {
 			log.Printf("Wrong job format: %s\n", body)
 			// TODO Remove msg from queue
@@ -137,7 +145,7 @@ func (m *manager) receive(c *ContainerConfig) { // TODO pass config
 		}
 
 		j.receivedAt = time.Now()
-		m.workers[c.Name].receivedChan <- &j
+		m.workers[c.Name].receivedChan <- j
 	}
 }
 

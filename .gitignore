@@ -4,3 +4,4 @@ vendor
 *.pdf
 worker.test
 FlameGraph
+.DS_Store

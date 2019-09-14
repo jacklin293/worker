@@ -23,4 +23,4 @@ trace:
 lint:
 	golangci-lint run
 clean:
-	rm *.out *.svg *.pdf
+	rm *.out *.svg *.pdf worker.test
