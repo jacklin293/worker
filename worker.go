@@ -5,13 +5,8 @@ import (
 	"sync"
 )
 
-type workerConfig struct {
-	Env       EnvConfig
-	Container ContainerConfig
-}
-
 type worker struct {
-	config       *workerConfig
+	config       sourceConfig
 	jobTypes     map[string]JobBehaviour
 	receivedChan chan *Job
 	doneChan     chan *Job
@@ -22,17 +17,17 @@ type worker struct {
 	// log *io.Writer
 }
 
-func newWorker(c *workerConfig) worker {
+func newWorker(c sourceConfig) worker {
 	return worker{
 		config:       c,
 		receivedChan: make(chan *Job),
 		jobTypes:     make(map[string]JobBehaviour),
-		status:       make(map[int]*Job, c.Container.Concurrency),
+		status:       make(map[int]*Job, c.Concurrency),
 	}
 }
 
 func (w *worker) run() {
-	for i := 0; i < w.config.Container.Concurrency; i++ {
+	for i := 0; i < w.config.Concurrency; i++ {
 		go func(w *worker, i int) {
 			for {
 				j := <-w.receivedChan

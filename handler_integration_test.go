@@ -17,17 +17,20 @@ type TestJob struct {
 	Now int64
 }
 
+var singleTopicConfig = `[{"name":"queue-1","provider":"gochannel","endpoint":"","source":"","concurrency":100,"enabled":true}]`
+
 // Test Race condition
-func (tj TestJob) Run(j *Job) {}
+func (tj TestJob) Run(j *Job) {
+	time.Sleep(1 * time.Millisecond)
+}
 
 func TestWorker(t *testing.T) {
-	conf := `{"env":{"env":"dev"},"containers":[{"name":"queue-1","provider":"gochannel","endpoint":"","source":"","concurrency":100,"enabled":true}]}`
 	doneCh := make(chan *Job)
 	receiveCh := make(chan []byte)
 
-	// New manager
+	// New handler
 	m := New()
-	m.SetConfigWithJSON(conf)
+	m.SetConfigWithJSON(singleTopicConfig)
 	m.SetNotifyChan(doneCh)
 	m.SetReceiveChan(receiveCh)
 	m.Run()
@@ -65,13 +68,12 @@ func TestWorker(t *testing.T) {
 }
 
 func BenchmarkWorker(b *testing.B) {
-	conf := `{"env":{"env":"dev"},"containers":[{"name":"queue-1","provider":"gochannel","endpoint":"","source":"","concurrency":100,"enabled":true}]}`
 	doneCh := make(chan *Job)
 	receiveCh := make(chan []byte)
 
-	// New manager
+	// New handler
 	m := New()
-	m.SetConfigWithJSON(conf)
+	m.SetConfigWithJSON(singleTopicConfig)
 	m.SetNotifyChan(doneCh)
 	m.SetReceiveChan(receiveCh)
 	m.Run()
@@ -101,13 +103,12 @@ func BenchmarkWorker(b *testing.B) {
 }
 
 func BenchmarkWorker10kJobs(b *testing.B) {
-	conf := `{"env":{"env":"dev"},"containers":[{"name":"queue-1","provider":"gochannel","endpoint":"","source":"","concurrency":100,"enabled":true}]}`
 	doneCh := make(chan *Job)
 	receiveCh := make(chan []byte)
 
-	// New manager
+	// New handler
 	m := New()
-	m.SetConfigWithJSON(conf)
+	m.SetConfigWithJSON(singleTopicConfig)
 	m.SetNotifyChan(doneCh)
 	m.SetReceiveChan(receiveCh)
 	m.Run()
