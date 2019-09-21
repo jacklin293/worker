@@ -5,13 +5,12 @@ import (
 	"time"
 )
 
-type JobBehaviour interface {
+type Runner interface {
 	Run(*Job)
 }
 
 type Job struct {
-	Desc   Descriptor
-	Config sourceConfig
+	Desc Descriptor
 
 	// TODO
 	// Log *io.Writer
@@ -69,7 +68,7 @@ func (j *Job) validate() (err error) {
 	return
 }
 
-func (j *Job) process(jb JobBehaviour) {
+func (j *Job) process(jb Runner) {
 	defer func(j *Job) {
 		if e := recover(); e != nil {
 			j.doneChan <- j

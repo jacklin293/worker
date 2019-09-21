@@ -2,27 +2,18 @@ package worker
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"reflect"
 	"sync"
 	"time"
+	"worker/source"
 )
-
-type sourceConfig struct {
-	Name        string `json:"name"`
-	Provider    string `json:"provider"`
-	Endpoint    string `json:"endpoint"`
-	topic       string `json:"topic"`
-	Concurrency int    `json:"concurrency"`
-	Enabled     bool   `json:"enabled"`
-}
 
 // ProjectName
 type handler struct {
 	workers map[string]*worker
-	config  []sourceConfig
+	config  []source.Config
 	jobPool *sync.Pool
 
 	// TODO
@@ -32,8 +23,7 @@ type handler struct {
 	doneChan chan *Job
 	// When job is done, notify someone who is interested in.
 	// New() won't initialise it
-	notifyChan  chan *Job
-	receiveChan chan []byte
+	notifyChan chan *Job
 
 	// TODO
 	// log *io.Writer
@@ -51,23 +41,19 @@ func New() *handler { // FIXME func should be named as Project name
 	return &m
 }
 
-func (m *handler) SetConfig() {
-
-}
-
 // Initialisation with config in json
 func (m *handler) SetConfigWithJSON(conf string) {
 	if err := json.Unmarshal([]byte(conf), &m.config); err != nil {
-		log.Fatalf("Failed to parse config, err: %v\n", err)
+		log.Fatalf("Failed to set config, err: %v\n", err)
 	}
 	if len(m.config) == 0 {
-		log.Fatal("No source configs")
+		log.Fatal("No any sources found")
 	}
 
 	workerEnabled := false
 	for _, c := range m.config {
-		if err := c.validate(); err != nil {
-			log.Fatal("Config err: ", err)
+		if err := c.Validate(); err != nil {
+			log.Fatal("Failed to set config, err: ", err)
 		}
 		if c.Enabled {
 			workerEnabled = true
@@ -83,34 +69,38 @@ func (m *handler) Run() {
 		log.Fatal("Please set config before running")
 	}
 	for _, c := range m.config {
-		// TODO
-		// check validate, if available source is zero, do log.Fatal
+		if !c.Enabled {
+			continue
+		}
 
 		// New worker
 		w := newWorker(c)
 		w.doneChan = m.doneChan
+		w.source = c.New()
 		w.run()
 		m.workers[c.Name] = &w
 
 		// Receive messages
-		go m.receive(c)
+		go m.receive(&w)
 	}
 	go m.done()
 }
 
-// TODO SQS Receive should be in package
-func (m *handler) receive(c sourceConfig) { // TODO pass config
-	var err error
+func (m *handler) receive(w *worker) {
 	for {
-		body := <-m.receiveChan // TODO Received
+		body, err := w.source.Receive()
+		if err != nil {
+			log.Println("err: ", err)
+			continue
+		}
 		var j Job
-		if err = m.processMessage(c, &body, &j); err != nil {
-			log.Printf("Wrong job format: %s\n", body)
+		if err = m.processMessage(w.config, &body, &j); err != nil {
+			log.Printf("err: %s\n", body)
 		}
 	}
 }
 
-func (m *handler) processMessage(c sourceConfig, msg *[]byte, j *Job) (err error) {
+func (m *handler) processMessage(c source.Config, msg *[]byte, j *Job) (err error) {
 	if err = json.Unmarshal(*msg, &j.Desc); err != nil {
 		return
 	}
@@ -139,7 +129,7 @@ func (m *handler) done() {
 }
 
 // New job type
-func (m *handler) InitJobType(jb JobBehaviour, sourceName string, jobType string) {
+func (m *handler) InitJobType(jb Runner, sourceName string, jobType string) {
 	if sourceName == "" || jobType == "" {
 		log.Fatal("Both source name and job type cannot be empty")
 	}
@@ -168,29 +158,12 @@ func (m *handler) SetNotifyChan(ch chan *Job) {
 	m.notifyChan = ch
 }
 
-// FIXME for benchmark temporarily
-func (m *handler) SetReceiveChan(ch chan []byte) {
-	// FIXME
-	m.receiveChan = ch
-}
-
-func (c sourceConfig) validate() (err error) {
-	// TODO only contain a-z, A-Z, -, _   unique name
-	if c.Name == "" {
-		return errors.New("source name cannot be empty")
+// Source name
+func (m *handler) GetSourceByName(name string) (source.Sourcer, error) {
+	for n, w := range m.workers {
+		if n == name {
+			return w.source, nil
+		}
 	}
-	if c.Provider == "" {
-		return fmt.Errorf("source '%s' provider cannot be empty", c.Name)
-	}
-	// FIXME Depends on which source used to decide whether to validate endpoint and source
-	// if c.Endpoint == "" {
-	//	return fmt.Errorf("source '%s' endpoint cannot be empty", c.Name)
-	// }
-	// if c.Source == "" {
-	//	return fmt.Errorf("source '%s' source cannot be empty", c.Name)
-	// }
-	if c.Concurrency == 0 {
-		return fmt.Errorf("source '%s' concurrency cannot be 0", c.Name)
-	}
-	return
+	return nil, fmt.Errorf("Failed to get source, err: source name not matched")
 }

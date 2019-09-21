@@ -17,7 +17,7 @@ type TestJob struct {
 	Now int64
 }
 
-var singleTopicConfig = `[{"name":"queue-1","provider":"gochannel","endpoint":"","source":"","concurrency":100,"enabled":true}]`
+var singleTopicConfig = `[{"name":"queue-1","queue":"go-channel","endpoint":"","source":"","concurrency":100,"enabled":true}]`
 
 // Test Race condition
 func (tj TestJob) Run(j *Job) {
@@ -26,14 +26,13 @@ func (tj TestJob) Run(j *Job) {
 
 func TestWorker(t *testing.T) {
 	doneCh := make(chan *Job)
-	receiveCh := make(chan []byte)
 
 	// New handler
 	m := New()
 	m.SetConfigWithJSON(singleTopicConfig)
 	m.SetNotifyChan(doneCh)
-	m.SetReceiveChan(receiveCh)
 	m.Run()
+	source, _ := m.GetSourceByName("queue-1")
 
 	// Initialise job
 	var wg sync.WaitGroup
@@ -46,7 +45,7 @@ func TestWorker(t *testing.T) {
 		for i := 0; i < total; i++ {
 			wg.Add(1)
 			go func(i int) {
-				receiveCh <- sendMessage(i)
+				source.Send(sendMessage(i))
 			}(i)
 		}
 	}(&wg, total)
@@ -69,14 +68,13 @@ func TestWorker(t *testing.T) {
 
 func BenchmarkWorker(b *testing.B) {
 	doneCh := make(chan *Job)
-	receiveCh := make(chan []byte)
 
 	// New handler
 	m := New()
 	m.SetConfigWithJSON(singleTopicConfig)
 	m.SetNotifyChan(doneCh)
-	m.SetReceiveChan(receiveCh)
 	m.Run()
+	source, _ := m.GetSourceByName("queue-1")
 
 	// Initialise job
 	var wg sync.WaitGroup
@@ -88,7 +86,7 @@ func BenchmarkWorker(b *testing.B) {
 		for i := 0; i < total; i++ {
 			wg.Add(1)
 			go func(i int) {
-				receiveCh <- sendMessage(i)
+				source.Send(sendMessage(i))
 			}(i)
 		}
 	}(&wg, total)
@@ -102,16 +100,15 @@ func BenchmarkWorker(b *testing.B) {
 	}
 }
 
-func BenchmarkWorker10kJobs(b *testing.B) {
+func BenchmarkWorker1kJobs(b *testing.B) {
 	doneCh := make(chan *Job)
-	receiveCh := make(chan []byte)
 
 	// New handler
 	m := New()
 	m.SetConfigWithJSON(singleTopicConfig)
 	m.SetNotifyChan(doneCh)
-	m.SetReceiveChan(receiveCh)
 	m.Run()
+	source, _ := m.GetSourceByName("queue-1")
 
 	// Initialise job
 	var wg sync.WaitGroup
@@ -119,12 +116,12 @@ func BenchmarkWorker10kJobs(b *testing.B) {
 	m.InitJobType(jt, "queue-1", "test-job-type-1")
 
 	for i := 0; i <= b.N; i++ {
-		total := 10000
+		total := 1000
 		go func(wg *sync.WaitGroup, total int) {
 			for i := 0; i < total; i++ {
 				wg.Add(1)
 				go func(i int) {
-					receiveCh <- sendMessage(i)
+					source.Send(sendMessage(i))
 				}(i)
 			}
 		}(&wg, total)
