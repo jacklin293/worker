@@ -44,7 +44,7 @@ func New() *handler { // FIXME func should be named as Project name
 // Initialisation with config in json
 func (m *handler) SetConfigWithJSON(conf string) {
 	if err := json.Unmarshal([]byte(conf), &m.config); err != nil {
-		log.Fatalf("Failed to set config, err: %v\n", err)
+		log.Fatalf("Failed to set config. Error: %v\n", err)
 	}
 	if len(m.config) == 0 {
 		log.Fatal("No any sources found")
@@ -53,7 +53,7 @@ func (m *handler) SetConfigWithJSON(conf string) {
 	workerEnabled := false
 	for _, c := range m.config {
 		if err := c.Validate(); err != nil {
-			log.Fatal("Failed to set config, err: ", err)
+			log.Fatal("Failed to set config. Error: ", err)
 		}
 		if c.Enabled {
 			workerEnabled = true
@@ -74,9 +74,14 @@ func (m *handler) Run() {
 		}
 
 		// New worker
+		s, err := source.New(&c)
+		if err != nil {
+			panic(fmt.Sprintf("Can't new source by config: %v", c))
+		}
+
 		w := newWorker(c)
 		w.doneChan = m.doneChan
-		w.source = c.New()
+		w.source = s
 		w.run()
 		m.workers[c.Name] = &w
 
@@ -88,14 +93,20 @@ func (m *handler) Run() {
 
 func (m *handler) receive(w *worker) {
 	for {
-		body, err := w.source.Receive()
+		messages, err := w.source.Receive()
 		if err != nil {
-			log.Println("err: ", err)
+			log.Println("Error: ", err)
 			continue
 		}
-		var j Job
-		if err = m.processMessage(w.config, &body, &j); err != nil {
-			log.Printf("err: %s\n", body)
+		if len(messages) == 0 {
+			continue
+		}
+		for _, msg := range messages {
+			var j Job
+			if err = m.processMessage(w.config, &msg, &j); err != nil {
+				log.Printf("Error: %s\n", err)
+				log.Println("body:", string(msg))
+			}
 		}
 	}
 }
@@ -165,5 +176,5 @@ func (m *handler) GetSourceByName(name string) (source.Sourcer, error) {
 			return w.source, nil
 		}
 	}
-	return nil, fmt.Errorf("Failed to get source, err: source name not matched")
+	return nil, fmt.Errorf("Failed to get source. Error: source name not matched")
 }

@@ -7,32 +7,30 @@ import (
 
 type Config struct {
 	Name        string `json:"name"`
-	Queue       string `json:"queue"`
+	SourceType  string `json:"source_type"`
 	Endpoint    string `json:"endpoint"`
-	topic       string `json:"topic"`
+	Topic       string `json:"topic"`
 	Concurrency int    `json:"concurrency"`
 	Enabled     bool   `json:"enabled"`
-}
-
-func (c *Config) New() Sourcer {
-	switch c.Queue {
-	case "go-channel":
-		return &GoChannel{receivedCh: make(chan []byte)}
-	}
-	return &GoChannel{}
+	Metadata    struct {
+		SQS SqsConfig `json:"sqs"`
+	} `json:"metadata"`
 }
 
 func (c *Config) Validate() (err error) {
+	// TODO switch c.Name {
+
 	// TODO only contain a-z, A-Z, -, _   unique name
 	if c.Name == "" {
-		return errors.New("source name cannot be empty")
+		return errors.New("name cannot be empty")
 	}
 	// TODO only contain a-z, A-Z, -, _   unique name
-	if c.Queue == "" {
-		return fmt.Errorf("source '%s' queue cannot be empty", c.Name)
+	// TODO only [ "go-channel", "sqs", "redis", etc. ] allowed
+	if c.SourceType == "" {
+		return fmt.Errorf("source_type cannot be empty")
 	}
 	if c.Concurrency == 0 {
-		return fmt.Errorf("source '%s' concurrency cannot be 0", c.Name)
+		return fmt.Errorf("concurrency cannot be 0")
 	}
 	return
 }
