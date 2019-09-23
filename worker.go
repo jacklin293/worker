@@ -49,12 +49,12 @@ func (w *worker) allocate(i int, j *Job) {
 
 	j.doneChan = w.doneChan
 
-	w.updateStatus(true, i, j)
+	w.updateJobStatus(true, i, j)
 	j.process(w.jobTypes[j.Desc.JobType])
-	w.updateStatus(false, i, j)
+	w.updateJobStatus(false, i, j)
 }
 
-func (w *worker) updateStatus(b bool, i int, j *Job) {
+func (w *worker) updateJobStatus(b bool, i int, j *Job) {
 	w.mutex.Lock()
 	if b {
 		w.status[i] = j

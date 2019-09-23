@@ -72,7 +72,6 @@ func (s *SQS) Send(msg []byte) error {
 }
 
 func (s *SQS) Receive() (messages [][]byte, err error) {
-	// TODO Support BatchReceive or just use batch receive
 	resp, err := s.service.ReceiveMessage(s.receiveMessageInput)
 	if err != nil {
 		return nil, errors.New("Failed to receive messages from SQS. " + err.Error())

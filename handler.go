@@ -171,10 +171,8 @@ func (m *handler) SetNotifyChan(ch chan *Job) {
 
 // Source name
 func (m *handler) GetSourceByName(name string) (source.Sourcer, error) {
-	for n, w := range m.workers {
-		if n == name {
-			return w.source, nil
-		}
+	if _, ok := m.workers[name]; ok {
+		return m.workers[name].source, nil
 	}
 	return nil, fmt.Errorf("Failed to get source. Error: source name not matched")
 }
