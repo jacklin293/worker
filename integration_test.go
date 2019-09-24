@@ -17,7 +17,18 @@ type TestJob struct {
 	Now int64
 }
 
-var singleTopicConfig = `[{"name":"queue-1","source_type":"go-channel","endpoint":"","source":"","concurrency":100,"enabled":true}]`
+var singleTopicConfig = `[
+	{
+		"name":"queue-1",
+		"source_type":"go_channel",
+		"source_concurrency": 3,
+		"worker_concurrency":100,
+		"enabled":true,
+		"go_channel": {
+			"size": 0
+		}
+	}
+]`
 
 // Test Race condition
 func (tj TestJob) Run(j *Job) {

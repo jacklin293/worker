@@ -13,7 +13,7 @@ import (
 // ProjectName
 type handler struct {
 	workers map[string]*worker
-	config  []source.Config
+	config  []*source.Config
 	jobPool *sync.Pool
 
 	// TODO
@@ -21,8 +21,9 @@ type handler struct {
 	//	VisibleChan chan *Job
 	// }
 	doneChan chan *Job
-	// When job is done, notify someone who is interested in.
-	// New() won't initialise it
+
+	// When job is done, notify someone whom is interested in.
+	// New() won't initialise it, leave it nil to disable as default
 	notifyChan chan *Job
 
 	// TODO
@@ -50,17 +51,10 @@ func (m *handler) SetConfigWithJSON(conf string) {
 		log.Fatal("No any sources found")
 	}
 
-	workerEnabled := false
 	for _, c := range m.config {
 		if err := c.Validate(); err != nil {
 			log.Fatal("Failed to set config. Error: ", err)
 		}
-		if c.Enabled {
-			workerEnabled = true
-		}
-	}
-	if !workerEnabled {
-		log.Fatal("None of sources are enabled")
 	}
 }
 
@@ -74,19 +68,16 @@ func (m *handler) Run() {
 		}
 
 		// New worker
-		s, err := source.New(&c)
-		if err != nil {
-			panic(fmt.Sprintf("Can't new source by config: %v", c))
-		}
-
 		w := newWorker(c)
 		w.doneChan = m.doneChan
-		w.source = s
+		w.source = c.New()
 		w.run()
 		m.workers[c.Name] = &w
 
 		// Receive messages
-		go m.receive(&w)
+		for i := int64(0); i < c.SourceConcurrency; i++ {
+			go m.receive(&w)
+		}
 	}
 	go m.done()
 }
@@ -104,14 +95,13 @@ func (m *handler) receive(w *worker) {
 		for _, msg := range messages {
 			var j Job
 			if err = m.processMessage(w.config, &msg, &j); err != nil {
-				log.Printf("Error: %s\n", err)
-				log.Println("body:", string(msg))
+				log.Printf("Error: %s, message: %s\n", err, string(msg))
 			}
 		}
 	}
 }
 
-func (m *handler) processMessage(c source.Config, msg *[]byte, j *Job) (err error) {
+func (m *handler) processMessage(c *source.Config, msg *[]byte, j *Job) (err error) {
 	if err = json.Unmarshal(*msg, &j.Desc); err != nil {
 		return
 	}

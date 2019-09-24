@@ -5,32 +5,49 @@ import (
 	"fmt"
 )
 
+type Configure interface {
+	validate() error
+	new() Sourcer
+}
+
 type Config struct {
-	Name        string `json:"name"`
-	SourceType  string `json:"source_type"`
-	Endpoint    string `json:"endpoint"`
-	Topic       string `json:"topic"`
-	Concurrency int    `json:"concurrency"`
-	Enabled     bool   `json:"enabled"`
-	Metadata    struct {
-		SQS SqsConfig `json:"sqs"`
-	} `json:"metadata"`
+	// Required
+	Name              string `json:"name"`
+	SourceType        string `json:"source_type"`
+	SourceConcurrency int64  `json:"source_concurrency"`
+	WorkerConcurrency int64  `json:"worker_concurrency"`
+	Enabled           bool   `json:"enabled"`
+
+	SourceTypeConfig Configure
+	sqsConfig        `json:"sqs"`
+	goChannelConfig  `json:"go_channel"`
 }
 
 func (c *Config) Validate() (err error) {
-	// TODO switch c.Name {
-
 	// TODO only contain a-z, A-Z, -, _   unique name
 	if c.Name == "" {
 		return errors.New("name cannot be empty")
 	}
-	// TODO only contain a-z, A-Z, -, _   unique name
-	// TODO only [ "go-channel", "sqs", "redis", etc. ] allowed
-	if c.SourceType == "" {
-		return fmt.Errorf("source_type cannot be empty")
+	if c.SourceConcurrency == 0 {
+		return fmt.Errorf("source_concurrency cannot be 0")
 	}
-	if c.Concurrency == 0 {
-		return fmt.Errorf("concurrency cannot be 0")
+	if c.WorkerConcurrency == 0 {
+		return fmt.Errorf("worker_concurrency cannot be 0")
+	}
+
+	// Validate source_type
+	// Convert config into Configure
+	switch c.SourceType {
+	case "sqs":
+		c.SourceTypeConfig = &c.sqsConfig
+	case "go_channel":
+		c.SourceTypeConfig = &c.goChannelConfig
+	default:
+		err = fmt.Errorf("source_type not supported")
 	}
 	return
+}
+
+func (c *Config) New() Sourcer {
+	return c.SourceTypeConfig.new()
 }

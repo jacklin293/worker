@@ -2,7 +2,6 @@ package source
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
@@ -12,13 +11,11 @@ const (
 	defaultWaitTimeSeconds = 20
 )
 
-type SQS struct {
-	service             *sqs.SQS
-	config              *Config
-	receiveMessageInput *sqs.ReceiveMessageInput
-}
+// Implementation
+type sqsConfig struct {
+	// e.g. https://sqs.us-west-1.amazonaws.com/4**********7/queue_name
+	QueueUrl string `json:"queue_url"`
 
-type SqsConfig struct {
 	UseLocalSqs        bool   `json:"use_local_sqs"`
 	Region             string `json:"region"`
 	CredentialFilename string `json:"credential_filename"`
@@ -30,27 +27,38 @@ type SqsConfig struct {
 	WaitTimeSeconds     int64 `json:"wait_time_seconds"`
 }
 
-func newSQS(c *Config) *SQS {
+// Config
+type SQS struct {
+	service             *sqs.SQS
+	config              *sqsConfig
+	receiveMessageInput *sqs.ReceiveMessageInput
+}
+
+func (c *sqsConfig) validate() error {
+	return nil
+}
+
+func (c *sqsConfig) new() Sourcer {
 	var endpoint string
-	if c.Metadata.SQS.UseLocalSqs {
+	if c.UseLocalSqs {
 		// Remove the last slash
-		endpoint = strings.TrimRight(c.Endpoint, "/")
+		endpoint = c.QueueUrl
 	}
-	session := newAwsSession(c.Metadata.SQS.Region, c.Metadata.SQS.CredentialFilename, c.Metadata.SQS.CredentialProfile, endpoint)
+	session := newAwsSession(c.Region, c.CredentialFilename, c.CredentialProfile, endpoint)
 
 	// New ReceiveMessageInput
 	recInput := &sqs.ReceiveMessageInput{}
-	recInput.SetQueueUrl(c.Endpoint + c.Topic)
-	if c.Metadata.SQS.MaxNumberOfMessages != 0 {
-		recInput.SetMaxNumberOfMessages(c.Metadata.SQS.MaxNumberOfMessages)
+	recInput.SetQueueUrl(c.QueueUrl)
+	if c.MaxNumberOfMessages != 0 {
+		recInput.SetMaxNumberOfMessages(c.MaxNumberOfMessages)
 	}
-	if c.Metadata.SQS.VisibilityTimeout != 0 {
-		recInput.SetVisibilityTimeout(c.Metadata.SQS.VisibilityTimeout)
+	if c.VisibilityTimeout != 0 {
+		recInput.SetVisibilityTimeout(c.VisibilityTimeout)
 	}
-	if c.Metadata.SQS.WaitTimeSeconds == 0 {
+	if c.WaitTimeSeconds == 0 {
 		recInput.SetWaitTimeSeconds(defaultWaitTimeSeconds)
 	} else {
-		recInput.SetWaitTimeSeconds(c.Metadata.SQS.WaitTimeSeconds)
+		recInput.SetWaitTimeSeconds(c.WaitTimeSeconds)
 	}
 
 	s := &SQS{
@@ -64,7 +72,7 @@ func newSQS(c *Config) *SQS {
 func (s *SQS) Send(msg []byte) error {
 	// New SendMessageInput
 	param := &sqs.SendMessageInput{
-		QueueUrl:    aws.String(s.config.Endpoint + s.config.Topic),
+		QueueUrl:    aws.String(s.config.QueueUrl),
 		MessageBody: aws.String(string(msg)),
 	}
 	_, err := s.service.SendMessage(param)
@@ -85,7 +93,7 @@ func (s *SQS) Receive() (messages [][]byte, err error) {
 
 func (s *SQS) Delete(receiptHandle string) (*sqs.DeleteMessageOutput, error) {
 	param := &sqs.DeleteMessageInput{
-		QueueUrl:      aws.String(s.config.Endpoint + s.config.Topic),
+		QueueUrl:      aws.String(s.config.QueueUrl),
 		ReceiptHandle: aws.String(receiptHandle),
 	}
 	return s.service.DeleteMessage(param)
