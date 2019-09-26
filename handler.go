@@ -23,7 +23,7 @@ type handler struct {
 	doneChan chan *Job
 
 	// When job is done, notify someone whom is interested in.
-	// New() won't initialise it, leave it nil to disable as default
+	// New() won't register it, leave it nil to disable as default
 	notifyChan chan *Job
 
 	// TODO
@@ -70,7 +70,7 @@ func (m *handler) Run() {
 		// New worker
 		w := newWorker(c)
 		w.doneChan = m.doneChan
-		w.source = c.New()
+		w.source = c.GetSourceAttr().New()
 		w.run()
 		m.workers[c.Name] = &w
 
@@ -109,7 +109,7 @@ func (m *handler) processMessage(c *source.Config, msg *[]byte, j *Job) (err err
 		return
 	}
 	if _, ok := m.workers[c.Name].jobTypes[j.Desc.JobType]; !ok {
-		log.Printf("Job type '%s'.'%s' is not initialised\n", c.Name, j.Desc.JobType)
+		log.Printf("Job type '%s'.'%s' not found\n", c.Name, j.Desc.JobType)
 		return
 	}
 	j.receivedAt = time.Now()
@@ -130,19 +130,18 @@ func (m *handler) done() {
 }
 
 // New job type
-func (m *handler) InitJobType(jb Runner, sourceName string, jobType string) {
-	if sourceName == "" || jobType == "" {
+func (m *handler) RegisterJobType(jb Runner, name string, jobType string) {
+	if name == "" || jobType == "" {
 		log.Fatal("Both source name and job type cannot be empty")
 	}
 	if reflect.ValueOf(jb).Kind() == reflect.Ptr {
-		log.Fatalf("Can not use pointer for initialising a job '%s'\n", jobType)
+		log.Fatalf("Can not use pointer for registering a job '%s'\n", jobType)
 	}
-	// Prevent from panic due to the fact that source name s not in the list
-	if _, ok := m.workers[sourceName]; !ok {
-		w := newWorker(m.workers[sourceName].config)
-		m.workers[sourceName] = &w
+	// Prevent from panic due to name that is not in the config
+	if _, ok := m.workers[name]; !ok {
+		return
 	}
-	m.workers[sourceName].jobTypes[jobType] = jb
+	m.workers[name].jobTypes[jobType] = jb
 }
 
 func (m *handler) GetJobTypes() (mm map[string][]string) {

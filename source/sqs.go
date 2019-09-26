@@ -38,7 +38,7 @@ func (c *sqsConfig) validate() error {
 	return nil
 }
 
-func (c *sqsConfig) new() Sourcer {
+func (c *sqsConfig) New() Sourcer {
 	var endpoint string
 	if c.UseLocalSqs {
 		// Remove the last slash

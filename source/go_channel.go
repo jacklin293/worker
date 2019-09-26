@@ -15,7 +15,7 @@ func (c *goChannelConfig) validate() error {
 	return nil
 }
 
-func (c *goChannelConfig) new() Sourcer {
+func (c *goChannelConfig) New() Sourcer {
 	return &GoChannel{
 		ch:     make(chan []byte, c.Size),
 		config: c,

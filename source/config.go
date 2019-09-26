@@ -7,7 +7,7 @@ import (
 
 type Configure interface {
 	validate() error
-	new() Sourcer
+	New() Sourcer
 }
 
 type Config struct {
@@ -18,9 +18,9 @@ type Config struct {
 	WorkerConcurrency int64  `json:"worker_concurrency"`
 	Enabled           bool   `json:"enabled"`
 
-	SourceTypeConfig Configure
-	sqsConfig        `json:"sqs"`
-	goChannelConfig  `json:"go_channel"`
+	sourceAttr      Configure
+	sqsConfig       `json:"sqs"`
+	goChannelConfig `json:"go_channel"`
 }
 
 func (c *Config) Validate() (err error) {
@@ -36,18 +36,21 @@ func (c *Config) Validate() (err error) {
 	}
 
 	// Validate source_type
-	// Convert config into Configure
 	switch c.SourceType {
-	case "sqs":
-		c.SourceTypeConfig = &c.sqsConfig
-	case "go_channel":
-		c.SourceTypeConfig = &c.goChannelConfig
+	case "sqs", "go_channel":
 	default:
-		err = fmt.Errorf("source_type not supported")
+		err = fmt.Errorf("source_type '%s' not supported", c.SourceType)
 	}
 	return
 }
 
-func (c *Config) New() Sourcer {
-	return c.SourceTypeConfig.new()
+// Convert config into Configure
+func (c *Config) GetSourceAttr() Configure {
+	switch c.SourceType {
+	case "sqs":
+		return &c.sqsConfig
+	case "go_channel":
+		return &c.goChannelConfig
+	}
+	return nil
 }

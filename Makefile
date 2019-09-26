@@ -5,6 +5,8 @@ unit:
 integration:
 	go test -v -tags=integration
 bench:
+	go test -v -tags=integration -bench=. -run=^a -benchmem
+vbench:
 	go test -v -tags=integration -bench=. -run=^a -benchmem -cpuprofile=cpu.out -memprofile=mem.out -trace=trace.out
 pprof:
 	go tool pprof -pdf $FILENAME.test cpu.out > cpu.pdf && open cpu.pdf

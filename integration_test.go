@@ -48,7 +48,7 @@ func TestWorker(t *testing.T) {
 	// Initialise job
 	var wg sync.WaitGroup
 	var jt = TestJob{}
-	m.InitJobType(jt, "queue-1", "test-job-type-1")
+	m.RegisterJobType(jt, "queue-1", "test-job-type-1")
 
 	counter := 0
 	total := 50000
@@ -90,7 +90,7 @@ func BenchmarkWorker(b *testing.B) {
 	// Initialise job
 	var wg sync.WaitGroup
 	var jt = TestJob{}
-	m.InitJobType(jt, "queue-1", "test-job-type-1")
+	m.RegisterJobType(jt, "queue-1", "test-job-type-1")
 
 	total := b.N
 	go func(wg *sync.WaitGroup, total int) {
@@ -124,7 +124,7 @@ func BenchmarkWorker1kJobs(b *testing.B) {
 	// Initialise job
 	var wg sync.WaitGroup
 	var jt = TestJob{}
-	m.InitJobType(jt, "queue-1", "test-job-type-1")
+	m.RegisterJobType(jt, "queue-1", "test-job-type-1")
 
 	for i := 0; i <= b.N; i++ {
 		total := 1000
