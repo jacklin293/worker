@@ -5,9 +5,12 @@ import (
 	"time"
 )
 
-type Runner interface {
-	Run(*Job)
+type Contract interface {
+	Run(*Job) error
+	Done(*Job, error)
 }
+
+type sign func() Contract
 
 type Job struct {
 	Desc Descriptor
@@ -68,19 +71,21 @@ func (j *Job) validate() (err error) {
 	return
 }
 
-func (j *Job) process(jb Runner) {
+func (j *Job) process(s sign) {
 	defer func(j *Job) {
 		if e := recover(); e != nil {
 			j.doneChan <- j
 		}
 	}(j)
 	j.didAt = time.Now()
-	jb.Run(j)
-	j.done()
+	jb := s()
+	err := jb.Run(j)
+	j.done(jb, err)
 	j.doneChan <- j
 }
 
-func (j *Job) done() {
+func (j *Job) done(jb Contract, err error) {
 	j.doneAt = time.Now()
 	j.duration = j.doneAt.Sub(j.receivedAt)
+	jb.Done(j, err)
 }

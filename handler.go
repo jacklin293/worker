@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"reflect"
 	"sync"
 	"time"
 	"worker/source"
@@ -130,18 +129,15 @@ func (m *handler) done() {
 }
 
 // New job type
-func (m *handler) RegisterJobType(jb Runner, name string, jobType string) {
+func (m *handler) RegisterJobType(name string, jobType string, s sign) {
 	if name == "" || jobType == "" {
 		log.Fatal("Both source name and job type cannot be empty")
-	}
-	if reflect.ValueOf(jb).Kind() == reflect.Ptr {
-		log.Fatalf("Can not use pointer for registering a job '%s'\n", jobType)
 	}
 	// Prevent from panic due to name that is not in the config
 	if _, ok := m.workers[name]; !ok {
 		return
 	}
-	m.workers[name].jobTypes[jobType] = jb
+	m.workers[name].jobTypes[jobType] = s
 }
 
 func (m *handler) GetJobTypes() (mm map[string][]string) {

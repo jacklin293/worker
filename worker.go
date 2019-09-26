@@ -9,7 +9,7 @@ import (
 type worker struct {
 	config       *source.Config
 	source       source.Sourcer
-	jobTypes     map[string]Runner
+	jobTypes     map[string]sign
 	receivedChan chan *Job
 	doneChan     chan *Job
 	status       map[int64]*Job
@@ -23,7 +23,7 @@ func newWorker(c *source.Config) worker {
 	return worker{
 		config:       c,
 		receivedChan: make(chan *Job),
-		jobTypes:     make(map[string]Runner),
+		jobTypes:     make(map[string]sign),
 		status:       make(map[int64]*Job, c.WorkerConcurrency),
 	}
 }
@@ -33,13 +33,13 @@ func (w *worker) run() {
 		go func(w *worker, i int64) {
 			for {
 				j := <-w.receivedChan
-				w.allocate(i, j)
+				w.process(i, j)
 			}
 		}(w, i)
 	}
 }
 
-func (w *worker) allocate(i int64, j *Job) {
+func (w *worker) process(i int64, j *Job) {
 	defer func() {
 		if e := recover(); e != nil {
 			log.Printf("panic: %v, message: %+v\n", e, j.Desc)
