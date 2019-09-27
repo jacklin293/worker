@@ -4,6 +4,7 @@ package worker
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -26,7 +27,16 @@ var singleTopicConfig = `[
 	}
 ]`
 
-type TestJob struct{}
+type TestBasic struct{}
+
+type TestDone struct {
+	ID       string
+	ReturnCh chan string
+}
+
+type TestErr struct {
+	ReturnCh chan string
+}
 
 type TestRaceRun struct {
 	ID       string `json:"id"`
@@ -42,10 +52,11 @@ func getMessage(id string) []byte {
 	return []byte(fmt.Sprintf(`{"job_id":"test-job-id-%s","job_type":"test-job-type-1","payload":"{\"id\":\"%s\",\"now\":%d}"}`, id, id, time.Now().Unix()))
 }
 
-func (tj *TestJob) Run(j *Job) error       { return nil }
-func (tj *TestJob) Done(j *Job, err error) {}
+// Test basic function
+func (tj *TestBasic) Run(j *Job) error       { return nil }
+func (tj *TestBasic) Done(j *Job, err error) {}
 
-func TestOneJob(t *testing.T) {
+func TestBasicJob(t *testing.T) {
 	doneCh := make(chan *Job)
 
 	// New handler
@@ -54,13 +65,11 @@ func TestOneJob(t *testing.T) {
 	m.SetNotifyChan(doneCh)
 	m.Run()
 	source, _ := m.GetSourceByName("queue-1")
-
-	// Initialise job
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
-		return &TestJob{}
+		return &TestBasic{}
 	})
 
-	// Expected msg
+	// Prepare the message and expected job struct
 	msg := getMessage("foo")
 	expected := Job{}
 	json.Unmarshal(msg, &expected.Desc)
@@ -71,8 +80,60 @@ func TestOneJob(t *testing.T) {
 
 	// Returned job (converted from message)
 	result := <-doneCh
-
 	assert.Equal(t, expected.Desc.Payload, result.Desc.Payload)
+}
+
+// Test Done
+func (t *TestDone) Run(j *Job) error {
+	t.ID = "foo"
+	return nil
+}
+func (t *TestDone) Done(j *Job, err error) { t.ReturnCh <- t.ID }
+
+func TestDoneJob(t *testing.T) {
+	doneCh := make(chan *Job)
+
+	// New handler
+	m := New()
+	m.SetConfigWithJSON(singleTopicConfig)
+	m.SetNotifyChan(doneCh)
+	m.Run()
+	source, _ := m.GetSourceByName("queue-1")
+	returnCh := make(chan string)
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+		return &TestDone{ReturnCh: returnCh}
+	})
+
+	// Send the message
+	source.Send(getMessage("foo"))
+	time.Sleep(1 * time.Millisecond)
+	assert.Equal(t, "foo", <-returnCh)
+	<-doneCh
+}
+
+// Test err
+func (t *TestErr) Run(j *Job) error       { return errors.New("bar") }
+func (t *TestErr) Done(j *Job, err error) { t.ReturnCh <- err.Error() }
+
+func TestErrJob(t *testing.T) {
+	doneCh := make(chan *Job)
+
+	// New handler
+	m := New()
+	m.SetConfigWithJSON(singleTopicConfig)
+	m.SetNotifyChan(doneCh)
+	m.Run()
+	source, _ := m.GetSourceByName("queue-1")
+	returnCh := make(chan string)
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+		return &TestErr{ReturnCh: returnCh}
+	})
+
+	// Send the message
+	source.Send(getMessage("foo"))
+	time.Sleep(1 * time.Millisecond)
+	assert.Equal(t, "bar", <-returnCh)
+	<-doneCh
 }
 
 // Test Race condition
@@ -84,7 +145,7 @@ func (tj *TestRaceRun) Run(j *Job) error {
 }
 func (tj *TestRaceRun) Done(j *Job, err error) {}
 
-func TestRaceConditionRun(t *testing.T) {
+func TestRaceConditionRunJob(t *testing.T) {
 	doneCh := make(chan *Job)
 
 	// New handler
@@ -108,7 +169,6 @@ func TestRaceConditionRun(t *testing.T) {
 	source.Send(getMessage(expectedID1))
 	time.Sleep(150 * time.Millisecond)
 	source.Send(getMessage(expectedID2))
-
 	assert.Equal(t, expectedID1, <-returnCh)
 	assert.Equal(t, expectedID2, <-returnCh)
 	<-doneCh
@@ -121,11 +181,9 @@ func (tj *TestRaceDone) Run(j *Job) error {
 	time.Sleep(300 * time.Millisecond)
 	return nil
 }
-func (tj *TestRaceDone) Done(j *Job, err error) {
-	tj.ReturnCh <- tj.ID
-}
+func (tj *TestRaceDone) Done(j *Job, err error) { tj.ReturnCh <- tj.ID }
 
-func TestRaceConditionDone(t *testing.T) {
+func TestRaceConditionDoneJob(t *testing.T) {
 	doneCh := make(chan *Job)
 
 	// New handler
@@ -156,6 +214,7 @@ func TestRaceConditionDone(t *testing.T) {
 	<-doneCh
 }
 
+// Test 50k jobs
 func Test50kJobs(t *testing.T) {
 	doneCh := make(chan *Job)
 
@@ -168,7 +227,7 @@ func Test50kJobs(t *testing.T) {
 
 	// Initialise job
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
-		return &TestJob{}
+		return &TestBasic{}
 	})
 
 	//
@@ -188,7 +247,7 @@ func Test50kJobs(t *testing.T) {
 	time.Sleep(1 * time.Millisecond)
 
 	go func(wg *sync.WaitGroup, counter *int) {
-		for {
+		for i := 0; i < total; i++ {
 			select {
 			case <-doneCh:
 				*counter++

@@ -22,6 +22,10 @@ var singleTopicConfig = `[
 	}
 ]`
 
+var signFn = func() Contract {
+	return &TestJob{}
+}
+
 type TestJob struct {
 	ID  string `json:"id"`
 	Now int64
@@ -51,7 +55,7 @@ func BenchmarkLoops(b *testing.B) {
 
 	// Initialise job
 	var wg sync.WaitGroup
-	m.RegisterJobType(&TestJob{}, "queue-1", "test-job-type-1")
+	m.RegisterJobType("queue-1", "test-job-type-1", signFn)
 
 	total := b.N
 	go func(wg *sync.WaitGroup, total int) {
@@ -84,7 +88,7 @@ func BenchmarkLoops1kJobs(b *testing.B) {
 
 	// Initialise job
 	var wg sync.WaitGroup
-	m.RegisterJobType(&TestJob{}, "queue-1", "test-job-type-1")
+	m.RegisterJobType("queue-1", "test-job-type-1", signFn)
 
 	for i := 0; i <= b.N; i++ {
 		total := 1000
