@@ -33,3 +33,5 @@ lint:
 	golangci-lint run
 clean:
 	rm *.out *.svg *.pdf worker.test
+build:
+	docker-compose up -d

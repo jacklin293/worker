@@ -1,6 +1,13 @@
 version: "2"
 services:
     sqs:
+      container_name: goaws
+      image: pafortin/goaws
+      ports:
+        - 4100:4100
+      volumes:
+       - ./local-sqs-config:/conf
+    sqs2:
       container_name: alpine-sqs
       image: roribio16/alpine-sqs
       ports:
