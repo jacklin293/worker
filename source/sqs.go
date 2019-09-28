@@ -10,13 +10,12 @@ import (
 )
 
 const (
-	defaultWaitTimeSeconds     = 20
-	defaultMaxNumberOfMessages = 1
+	defaultWaitTimeSeconds = 20
 )
 
 // Implementation
 type sqsConfig struct {
-	// e.g. https://sqs.us-west-1.amazonaws.com/4**********7/queue_name
+	// e.g. https://sqs.us-east-1.amazonaws.com/4**********7/queue_name
 	QueueUrl string `json:"queue_url"`
 
 	UseLocalSqs        bool   `json:"use_local_sqs"`
@@ -59,7 +58,10 @@ func (c *sqsConfig) New() (s Sourcer, err error) {
 			return nil, err
 		}
 	}
-	session := newAwsSession(c.Region, c.CredentialFilename, c.CredentialProfile, endpoint)
+	session, err := newAwsSession(c.Region, c.CredentialFilename, c.CredentialProfile, endpoint)
+	if err != nil {
+		return nil, err
+	}
 
 	// New ReceiveMessageInput
 	recInput := &sqs.ReceiveMessageInput{}
@@ -94,13 +96,13 @@ func (c *sqsConfig) getEndpoint() (endpoint string, err error) {
 }
 
 func (s *SQS) Send(msgs interface{}) (interface{}, error) {
-	var entries []*sqs.SendMessageBatchRequestEntry
+	entries := make([]*sqs.SendMessageBatchRequestEntry, len(msgs.([][]byte)))
 	for i, msg := range msgs.([][]byte) {
 		e := sqs.SendMessageBatchRequestEntry{
 			Id:          aws.String(fmt.Sprintf("Message-ID-%d", i)),
 			MessageBody: aws.String(string(msg)),
 		}
-		entries = append(entries, &e)
+		entries[i] = &e
 	}
 	param := &sqs.SendMessageBatchInput{
 		Entries:  entries,
@@ -120,18 +122,20 @@ func (s *SQS) Receive() (interface{}, error) {
 		messages[i] = []byte(*msg.Body)
 		receipts[i] = *msg.ReceiptHandle
 	}
-	_, err = s.Delete(receipts)
+	if len(resp.Messages) > 0 {
+		_, err = s.Delete(receipts)
+	}
 	return messages, err
 }
 
 func (s *SQS) Delete(receipts []string) (*sqs.DeleteMessageBatchOutput, error) {
-	var entries []*sqs.DeleteMessageBatchRequestEntry
+	entries := make([]*sqs.DeleteMessageBatchRequestEntry, len(receipts))
 	for i, receipt := range receipts {
 		e := sqs.DeleteMessageBatchRequestEntry{
 			Id:            aws.String(fmt.Sprintf("Message-ID-%d", i)),
 			ReceiptHandle: aws.String(receipt),
 		}
-		entries = append(entries, &e)
+		entries[i] = &e
 	}
 	param := &sqs.DeleteMessageBatchInput{
 		Entries:  entries,

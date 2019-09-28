@@ -9,27 +9,73 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSqsSendAndReceive(t *testing.T) {
+func TestSqsBasicSendAndReceive(t *testing.T) {
 	c := sqsConfig{
-		QueueUrl:            "http://sqs.us-east-1.localhost:4100/100010001000/source-integration-test",
-		Region:              "us-east-1",
+		QueueUrl:    "http://localhost:4100/100010001000/source-integration-test",
+		UseLocalSqs: true,
+		Region:      "us-east-1",
+	}
+	s, err := c.New()
+	assert.NotNil(t, s)
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	// Send
+	sendRes, err := s.Send([][]byte{[]byte("foo")})
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Equal(t, 1, len(sendRes.(*sqs.SendMessageBatchOutput).Successful))
+
+	// Receive
+	recRes, err := s.Receive()
+	if !assert.NoError(t, err) {
+		return
+	}
+	msgs := recRes.([][]byte)
+	if assert.Equal(t, 1, len(msgs)) {
+		assert.Equal(t, "foo", string(msgs[0]))
+	}
+}
+
+func TestSqsMessagesOfSendAndReceive(t *testing.T) {
+	c := sqsConfig{
+		QueueUrl:            "http://localhost:4100/100010001000/source-integration-test",
 		UseLocalSqs:         true,
+		Region:              "us-east-1",
 		MaxNumberOfMessages: 10,
 	}
 	s, err := c.New()
 	assert.NotNil(t, s)
-	assert.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return
+	}
 
 	// Send
 	sendRes, err := s.Send([][]byte{[]byte("foo"), []byte("bar")})
-	assert.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return
+	}
 	assert.Equal(t, 2, len(sendRes.(*sqs.SendMessageBatchOutput).Successful))
 
 	// Receive
 	recRes, err := s.Receive()
-	assert.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return
+	}
 	msgs := recRes.([][]byte)
-	assert.Equal(t, 2, len(msgs))
+
+	// Messages might be retrived in random order
+	table := map[string]bool{"foo": false, "bar": false}
+	assert.Equal(t, len(table), len(msgs))
+	for _, msg := range msgs {
+		key := string(msg)
+		_, ok := table[key]
+		assert.True(t, ok)
+		assert.False(t, table[key]) // make sure every item is unique
+		table[key] = true           // flag the item
+	}
 }
 
 func TestSqsReceiveBehaviours(t *testing.T) {
@@ -52,21 +98,31 @@ func TestSqsReceiveBehaviours(t *testing.T) {
 	}
 	for _, tt := range tests {
 		c := sqsConfig{
-			QueueUrl:            "http://sqs.us-east-1.localhost:4100/100010001000/source-integration-test",
-			Region:              "us-east-1",
+			QueueUrl:            "http://localhost:4100/100010001000/source-integration-test",
 			UseLocalSqs:         true,
+			Region:              "us-east-1",
 			MaxNumberOfMessages: tt.maxNumberOfMessages,
 		}
-		s, _ := c.New()
+		s, err := c.New()
+		assert.NotNil(t, s)
+		if !assert.NoError(t, err) {
+			return
+		}
 
 		// Send
 		for i := 0; i < tt.sendBatchNumberOfMessages; i++ {
-			s.Send([][]byte{[]byte("foo")})
+			_, err = s.Send([][]byte{[]byte("foo")})
+			if !assert.NoError(t, err) {
+				return
+			}
 		}
 
 		// Receive
 		for _, num := range tt.expectedNumberOfMessages {
-			msgs, _ := s.Receive()
+			msgs, err := s.Receive()
+			if !assert.NoError(t, err) {
+				return
+			}
 			assert.Equal(t, num, len(msgs.([][]byte)))
 		}
 	}

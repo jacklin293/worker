@@ -19,8 +19,8 @@ type worker struct {
 	// log *io.Writer
 }
 
-func newWorker(c *source.Config) worker {
-	return worker{
+func newWorker(c *source.Config) *worker {
+	return &worker{
 		config:       c,
 		receivedChan: make(chan *Job),
 		jobTypes:     make(map[string]sign),

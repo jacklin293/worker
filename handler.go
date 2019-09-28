@@ -35,7 +35,7 @@ func New() *handler { // FIXME func should be named as Project name
 }
 
 // Initialisation with config in json
-func (m *handler) SetConfigWithJSON(conf string) {
+func (m *handler) InitWithJsonConfig(conf string) {
 	if err := json.Unmarshal([]byte(conf), &m.config); err != nil {
 		log.Fatalf("Failed to set config. Error: %v\n", err)
 	}
@@ -48,12 +48,7 @@ func (m *handler) SetConfigWithJSON(conf string) {
 			log.Fatal("Failed to set config. Error: ", err)
 		}
 	}
-}
 
-func (m *handler) Run() {
-	if m.config == nil {
-		log.Fatal("Please set config before running")
-	}
 	for _, c := range m.config {
 		if !c.Enabled {
 			continue
@@ -66,15 +61,30 @@ func (m *handler) Run() {
 		}
 
 		// New worker
-		w := newWorker(c)
+		w, ok := m.workers[c.Name]
+		if !ok {
+			w = newWorker(c)
+			m.workers[c.Name] = w
+		}
 		w.doneChan = m.doneChan
 		w.source = s
+	}
+}
+
+func (m *handler) Run() {
+	if m.config == nil {
+		log.Fatal("Please set config before running")
+	}
+	for _, c := range m.config {
+		if !c.Enabled {
+			continue
+		}
+		w := m.workers[c.Name]
 		w.run()
-		m.workers[c.Name] = &w
 
 		// Receive messages
 		for i := int64(0); i < c.SourceConcurrency; i++ {
-			go m.receive(&w)
+			go m.receive(w)
 		}
 	}
 	go m.done()
@@ -109,10 +119,8 @@ func (m *handler) receive(w *worker) {
 				log.Printf("Error: %s, message: %s\n", err, string(message.([]byte)))
 			}
 		default:
-			if err != nil {
-				log.Println("Error: unknown type of return from Receive()")
-				continue
-			}
+			log.Println("Error: unknown type of return from Receive()")
+			continue
 		}
 	}
 }
@@ -150,7 +158,7 @@ func (m *handler) RegisterJobType(name string, jobType string, s sign) {
 	if name == "" || jobType == "" {
 		log.Fatal("Both source name and job type can't be empty")
 	}
-	// Prevent from panic due to name that is not in the config
+	// Prevent panic from not being in the list of config
 	if _, ok := m.workers[name]; !ok {
 		return
 	}

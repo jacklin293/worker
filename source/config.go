@@ -18,7 +18,6 @@ type Config struct {
 	WorkerConcurrency int64  `json:"worker_concurrency"`
 	Enabled           bool   `json:"enabled"`
 
-	sourceAttr      Configure
 	sqsConfig       `json:"sqs"`
 	goChannelConfig `json:"go_channel"`
 }

@@ -7,11 +7,13 @@ services:
         - 4100:4100
       volumes:
        - ./local-sqs-config:/conf
-    sqs2:
-      container_name: alpine-sqs
-      image: roribio16/alpine-sqs
-      ports:
-        - "9324:9324"
-        - "9325:9325"
+#   sqs2:
+#     container_name: alpine-sqs
+#     image: roribio16/alpine-sqs
+#     ports:
+#       - "9324:9324"
+#       - "9325:9325"
+# UI: http://localhost:9325/
+# Queue: http://localhost:9324/queue/default
 
 

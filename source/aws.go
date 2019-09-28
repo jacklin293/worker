@@ -8,12 +8,16 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 )
 
-func newAwsSession(region string, filename string, profile string, endpoint string) *session.Session {
+func newAwsSession(region string, filename string, profile string, endpoint string) (*session.Session, error) {
+	s, err := session.NewSession()
+	if err != nil {
+		return nil, err
+	}
 	config := aws.NewConfig()
 	var ProviderList []credentials.Provider = []credentials.Provider{
 		&credentials.EnvProvider{},
 		&ec2rolecreds.EC2RoleProvider{
-			Client: ec2metadata.New(session.New(), config),
+			Client: ec2metadata.New(s, config),
 		},
 		&credentials.SharedCredentialsProvider{
 			Filename: filename,
@@ -27,5 +31,5 @@ func newAwsSession(region string, filename string, profile string, endpoint stri
 	if endpoint != "" {
 		config.WithEndpoint(endpoint)
 	}
-	return session.New(config)
+	return session.NewSession(config)
 }

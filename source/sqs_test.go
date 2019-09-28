@@ -17,13 +17,13 @@ func TestSqsValidate(t *testing.T) {
 	}{
 		{"", "", 0, true},
 		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "", 0, true},
-		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "us-west-1", -1, true},
-		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "us-west-1", 0, false},
-		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "us-west-1", 1, false},
-		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "us-west-1", 5, false},
-		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "us-west-1", 9, false},
-		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "us-west-1", 10, false},
-		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "us-west-1", 11, true},
+		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "us-east-1", -1, true},
+		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "us-east-1", 0, false},
+		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "us-east-1", 1, false},
+		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "us-east-1", 5, false},
+		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "us-east-1", 9, false},
+		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "us-east-1", 10, false},
+		{"http://sqs.us-east-1.localhost:4100/100010001000/test-queue", "us-east-1", 11, true},
 	}
 	for _, tt := range tests {
 		c := sqsConfig{QueueUrl: tt.queueUrl, Region: tt.region, MaxNumberOfMessages: tt.maxNumberOfMessages}
@@ -50,7 +50,7 @@ func TestSqsNew(t *testing.T) {
 		c := sqsConfig{
 			QueueUrl:            tt.queueUrl,
 			UseLocalSqs:         tt.useLocalSqs,
-			Region:              "us-west-1",
+			Region:              "us-east-1",
 			MaxNumberOfMessages: tt.maxNumberOfMessages,
 			VisibilityTimeout:   tt.visibilityTimeout,
 			WaitTimeSeconds:     tt.waitTimeSeconds,

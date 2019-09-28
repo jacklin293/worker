@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var singleTopicConfig = `[
+var goChannelConfig = `[
 	{
 		"name":"queue-1",
 		"source_type":"go_channel",
@@ -27,8 +27,25 @@ var singleTopicConfig = `[
 	}
 ]`
 
+var sqsConfig = `[
+	{
+		"name":"queue-1",
+		"source_type":"sqs",
+		"source_concurrency": 1,
+		"worker_concurrency":100,
+		"enabled":true,
+		"sqs": {
+			"queue_url": "http://localhost:4100/100010001000/integration-test",
+			"use_local_sqs": true,
+			"region": "us-east-1",
+			"max_number_of_messages": 2,
+			"wait_time_seconds": 2
+		}
+	}
+]`
+
 func getMessage(id string) []byte {
-	return []byte(fmt.Sprintf(`{"job_id":"test-job-id-%s","job_type":"test-job-type-1","payload":"{\"id\":\"%s\",\"timestamp\":%d}"}`, id, id, time.Now().Unix()))
+	return []byte(fmt.Sprintf(`{"job_id":"test-job-id-%s","job_type":"test-job-type-1","payload":"{\"id\":\"%s\",\"timestamp\":%d}"}`, id, id, time.Now().UnixNano()))
 }
 
 // ------------------------------------------------------------------
@@ -44,13 +61,13 @@ func TestBasicJob(t *testing.T) {
 
 	// New handler
 	m := New()
-	m.SetConfigWithJSON(singleTopicConfig)
+	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.Run()
-	source, _ := m.GetSourceByName("queue-1")
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
 		return &TestBasic{}
 	})
+	m.Run()
+	s, _ := m.GetSourceByName("queue-1")
 
 	// Prepare the message and expected job struct
 	msg := getMessage("foo")
@@ -58,7 +75,7 @@ func TestBasicJob(t *testing.T) {
 	json.Unmarshal(msg, &expected.Desc)
 
 	// Send the message
-	source.Send(msg)
+	s.Send(msg)
 	time.Sleep(1 * time.Millisecond)
 
 	// Returned job (converted from message)
@@ -82,20 +99,20 @@ func (t *TestDone) Done(j *Job, err error) { t.ReturnCh <- t.ID }
 
 func TestDoneJob(t *testing.T) {
 	doneCh := make(chan *Job)
+	returnCh := make(chan string)
 
 	// New handler
 	m := New()
-	m.SetConfigWithJSON(singleTopicConfig)
+	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.Run()
-	source, _ := m.GetSourceByName("queue-1")
-	returnCh := make(chan string)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
 		return &TestDone{ReturnCh: returnCh}
 	})
+	m.Run()
+	s, _ := m.GetSourceByName("queue-1")
 
 	// Send the message
-	source.Send(getMessage("foo"))
+	s.Send(getMessage("foo"))
 	time.Sleep(1 * time.Millisecond)
 	assert.Equal(t, "foo", <-returnCh)
 	<-doneCh
@@ -113,20 +130,20 @@ func (t *TestErr) Done(j *Job, err error) { t.ReturnCh <- err.Error() }
 
 func TestErrJob(t *testing.T) {
 	doneCh := make(chan *Job)
+	returnCh := make(chan string)
 
 	// New handler
 	m := New()
-	m.SetConfigWithJSON(singleTopicConfig)
+	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.Run()
-	source, _ := m.GetSourceByName("queue-1")
-	returnCh := make(chan string)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
 		return &TestErr{ReturnCh: returnCh}
 	})
+	m.Run()
+	s, _ := m.GetSourceByName("queue-1")
 
 	// Send the message
-	source.Send(getMessage("foo"))
+	s.Send(getMessage("foo"))
 	time.Sleep(1 * time.Millisecond)
 	assert.Equal(t, "bar", <-returnCh)
 	<-doneCh
@@ -150,28 +167,26 @@ func (tj *TestStructPointerMisuseRun) Done(j *Job, err error) {}
 
 func TestStructPointerMisuseRunJob(t *testing.T) {
 	doneCh := make(chan *Job)
+	returnCh := make(chan string)
 
 	// New handler
 	m := New()
-	m.SetConfigWithJSON(singleTopicConfig)
+	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.Run()
-	source, _ := m.GetSourceByName("queue-1")
-
-	// Initialise job
-	returnCh := make(chan string)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
 		return &TestStructPointerMisuseRun{ReturnCh: returnCh}
 	})
+	m.Run()
+	s, _ := m.GetSourceByName("queue-1")
 
 	// Expected ID
 	expectedID1 := "foo"
 	expectedID2 := "bar"
 
 	// Send the messages separately with 150ms delay
-	source.Send(getMessage(expectedID1))
+	s.Send(getMessage(expectedID1))
 	time.Sleep(150 * time.Millisecond)
-	source.Send(getMessage(expectedID2))
+	s.Send(getMessage(expectedID2))
 	assert.Equal(t, expectedID1, <-returnCh)
 	assert.Equal(t, expectedID2, <-returnCh)
 	<-doneCh
@@ -195,29 +210,26 @@ func (tj *TestStructPointerMisuseDone) Done(j *Job, err error) { tj.ReturnCh <- 
 
 func TestStructPointerMisuseDoneJob(t *testing.T) {
 	doneCh := make(chan *Job)
+	returnCh := make(chan string)
 
 	// New handler
 	m := New()
-	m.SetConfigWithJSON(singleTopicConfig)
+	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.Run()
-	source, _ := m.GetSourceByName("queue-1")
-
-	// Initialise job
-	returnCh := make(chan string)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
 		return &TestStructPointerMisuseDone{ReturnCh: returnCh}
 	})
+	m.Run()
+	s, _ := m.GetSourceByName("queue-1")
 
 	// Expected ID
 	expectedID1 := "foo"
 	expectedID2 := "bar"
 
 	// Send the messages separately with 150ms delay
-	source.Send(getMessage(expectedID1))
+	s.Send(getMessage(expectedID1))
 	time.Sleep(150 * time.Millisecond)
-	source.Send(getMessage(expectedID2))
-
+	s.Send(getMessage(expectedID2))
 	assert.Equal(t, expectedID1, <-returnCh)
 	assert.Equal(t, expectedID2, <-returnCh)
 	<-doneCh
@@ -243,29 +255,26 @@ func (tj *TestStructPointerMisuseCustom) Custom()                { tj.ReturnCh <
 
 func TestStructPointerMisuseCustomJob(t *testing.T) {
 	doneCh := make(chan *Job)
+	returnCh := make(chan string)
 
 	// New handler
 	m := New()
-	m.SetConfigWithJSON(singleTopicConfig)
+	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.Run()
-	source, _ := m.GetSourceByName("queue-1")
-
-	// Initialise job
-	returnCh := make(chan string)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
 		return &TestStructPointerMisuseCustom{ReturnCh: returnCh}
 	})
+	m.Run()
+	s, _ := m.GetSourceByName("queue-1")
 
 	// Expected ID
 	expectedID1 := "foo"
 	expectedID2 := "bar"
 
 	// Send the messages separately with 150ms delay
-	source.Send(getMessage(expectedID1))
+	s.Send(getMessage(expectedID1))
 	time.Sleep(150 * time.Millisecond)
-	source.Send(getMessage(expectedID2))
-
+	s.Send(getMessage(expectedID2))
 	assert.Equal(t, expectedID1, <-returnCh)
 	assert.Equal(t, expectedID2, <-returnCh)
 	<-doneCh
@@ -293,29 +302,26 @@ func (tj *TestStructPointerMisuseDoneCustom) Custom() { tj.ReturnCh <- tj.ID }
 
 func TestStructPointerMisuseDoneCustomJob(t *testing.T) {
 	doneCh := make(chan *Job)
+	returnCh := make(chan string)
 
 	// New handler
 	m := New()
-	m.SetConfigWithJSON(singleTopicConfig)
+	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.Run()
-	source, _ := m.GetSourceByName("queue-1")
-
-	// Initialise job
-	returnCh := make(chan string)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
 		return &TestStructPointerMisuseDoneCustom{ReturnCh: returnCh}
 	})
+	m.Run()
+	s, _ := m.GetSourceByName("queue-1")
 
 	// Expected ID
 	expectedID1 := "foo"
 	expectedID2 := "bar"
 
 	// Send the messages separately with 150ms delay
-	source.Send(getMessage(expectedID1))
+	s.Send(getMessage(expectedID1))
 	time.Sleep(150 * time.Millisecond)
-	source.Send(getMessage(expectedID2))
-
+	s.Send(getMessage(expectedID2))
 	assert.Equal(t, expectedID1+"/done", <-returnCh)
 	assert.Equal(t, expectedID2+"/done", <-returnCh)
 	<-doneCh
@@ -338,10 +344,10 @@ func TestPanicRunJob(t *testing.T) {
 
 	// New handler
 	m := New()
-	m.SetConfigWithJSON(singleTopicConfig)
+	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
 	m.Run()
-	source, _ := m.GetSourceByName("queue-1")
+	s, _ := m.GetSourceByName("queue-1")
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
 		return &TestPanicRun{}
 	})
@@ -352,7 +358,7 @@ func TestPanicRunJob(t *testing.T) {
 	json.Unmarshal(msg, &expected.Desc)
 
 	// Send the message
-	source.Send(msg)
+	s.Send(msg)
 	time.Sleep(1 * time.Millisecond)
 
 	// Returned job (converted from message)
@@ -373,10 +379,10 @@ func TestPanicDoneJob(t *testing.T) {
 
 	// New handler
 	m := New()
-	m.SetConfigWithJSON(singleTopicConfig)
+	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
 	m.Run()
-	source, _ := m.GetSourceByName("queue-1")
+	s, _ := m.GetSourceByName("queue-1")
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
 		return &TestPanicDone{}
 	})
@@ -387,7 +393,7 @@ func TestPanicDoneJob(t *testing.T) {
 	json.Unmarshal(msg, &expected.Desc)
 
 	// Send the message
-	source.Send(msg)
+	s.Send(msg)
 	time.Sleep(1 * time.Millisecond)
 
 	// Returned job (converted from message)
@@ -409,10 +415,10 @@ func TestPanicCustomJob(t *testing.T) {
 
 	// New handler
 	m := New()
-	m.SetConfigWithJSON(singleTopicConfig)
+	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
 	m.Run()
-	source, _ := m.GetSourceByName("queue-1")
+	s, _ := m.GetSourceByName("queue-1")
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
 		return &TestPanicCustom{}
 	})
@@ -423,7 +429,7 @@ func TestPanicCustomJob(t *testing.T) {
 	json.Unmarshal(msg, &expected.Desc)
 
 	// Send the message
-	source.Send(msg)
+	s.Send(msg)
 	time.Sleep(1 * time.Millisecond)
 
 	// Returned job (converted from message)
@@ -433,23 +439,25 @@ func TestPanicCustomJob(t *testing.T) {
 
 // ------------------------------------------------------------------
 
-// Test 50k jobs
-func Test50kJobs(t *testing.T) {
+// Test GoChannel 50k jobs
+func TestGoChannel50kJobs(t *testing.T) {
 	doneCh := make(chan *Job)
 
 	// New handler
 	m := New()
-	m.SetConfigWithJSON(singleTopicConfig)
+	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.Run()
-	source, _ := m.GetSourceByName("queue-1")
-
-	// Initialise job
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
 		return &TestBasic{}
 	})
+	m.Run()
+	s, err := m.GetSourceByName("queue-1")
+	if err != nil {
+		t.Log(err)
+		return
+	}
 
-	//
+	// Send
 	var wg sync.WaitGroup
 	counter := 0
 	total := 50000
@@ -457,7 +465,7 @@ func Test50kJobs(t *testing.T) {
 		for i := 0; i < total; i++ {
 			wg.Add(1)
 			go func(i int) {
-				source.Send(getMessage(strconv.Itoa(i)))
+				s.Send(getMessage(strconv.Itoa(i)))
 			}(i)
 		}
 	}(&wg, total)
@@ -465,6 +473,7 @@ func Test50kJobs(t *testing.T) {
 	// Let wg.Add works before it ends
 	time.Sleep(1 * time.Millisecond)
 
+	// Receive
 	go func(wg *sync.WaitGroup, counter *int) {
 		for i := 0; i < total; i++ {
 			select {
@@ -477,6 +486,64 @@ func Test50kJobs(t *testing.T) {
 	wg.Wait()
 
 	assert.Equal(t, total, counter)
+	t.Logf("counter/total: %d/%d\n", counter, total)
+}
+
+// ------------------------------------------------------------------
+
+// Test SQS 500 jobs
+// FIXME up to 50,000
+func TestSqs500Jobs(t *testing.T) {
+	doneCh := make(chan *Job)
+
+	// New handler
+	m := New()
+	m.InitWithJsonConfig(sqsConfig)
+	m.SetNotifyChan(doneCh)
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+		return &TestBasic{}
+	})
+	m.Run()
+	s, err := m.GetSourceByName("queue-1")
+	assert.NotNil(t, s)
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	// Send
+	var wg sync.WaitGroup
+	counter := 0
+	total := 500
+	go func(wg *sync.WaitGroup, total int) {
+		for i := 0; i < total; i++ {
+			wg.Add(1)
+			go func(i int) {
+				_, err := s.Send([][]byte{getMessage(strconv.Itoa(i))})
+				if !assert.NoError(t, err) {
+					t.Log(err)
+					return
+				}
+			}(i)
+		}
+	}(&wg, total)
+
+	// Let wg.Add works before it ends
+	time.Sleep(1 * time.Millisecond)
+
+	// Receive
+	go func(wg *sync.WaitGroup, counter *int) {
+		for i := 0; i < total; i++ {
+			select {
+			case <-doneCh:
+				*counter++
+				wg.Done()
+			}
+		}
+	}(&wg, &counter)
+	wg.Wait()
+
+	assert.Equal(t, total, counter)
+	t.Logf("counter/total: %d/%d\n", counter, total)
 }
 
 // ------------------------------------------------------------------
