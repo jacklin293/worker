@@ -1,5 +1,7 @@
 package source
 
+import "errors"
+
 // Config
 type goChannelConfig struct {
 	Size int64 `json:"size"`
@@ -12,14 +14,17 @@ type GoChannel struct {
 }
 
 func (c *goChannelConfig) validate() error {
+	if c.Size < 0 {
+		return errors.New("size must be greater than or equal to 0")
+	}
 	return nil
 }
 
-func (c *goChannelConfig) New() Sourcer {
+func (c *goChannelConfig) New() (Sourcer, error) {
 	return &GoChannel{
 		ch:     make(chan []byte, c.Size),
 		config: c,
-	}
+	}, nil
 }
 
 func (ch *GoChannel) Send(msg interface{}) (interface{}, error) {

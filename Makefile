@@ -1,15 +1,15 @@
 # more pprof https://gist.github.com/arsham/bbc93990d8e5c9b54128a3d88901ab90
 
-unit:
-	go test -v -tags=unit -cover
-integration:
-	go test -v -tags=integration -cover
 quick:
 	go test -v -tags=integration -run TestBasicJob
+unit:
+	go test -v -tags=unit ./... -cover
+integration:
+	go test -v -tags=integration ./... -cover
 cover:
-	go test -v -coverprofile=unit-coverage.out
+	go test -v -tags=unit ./... -coverprofile=unit-coverage.out
 	go tool cover -html=unit-coverage.out
-	go test -v -tags=integration -coverprofile=integration-coverage.out
+	go test -v -tags=integration ./... -coverprofile=integration-coverage.out
 	go tool cover -html=integration-coverage.out
 bench:
 	go test -v -tags=bench -bench=. -run=^a -benchmem

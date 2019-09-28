@@ -7,7 +7,7 @@ import (
 
 type Configure interface {
 	validate() error
-	New() Sourcer
+	New() (Sourcer, error)
 }
 
 type Config struct {

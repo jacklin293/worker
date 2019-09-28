@@ -59,13 +59,13 @@ type Descriptor struct {
 
 func (j *Job) validate() (err error) {
 	if j.Desc.JobID == "" {
-		return fmt.Errorf("Job ID cannot be empty")
+		return fmt.Errorf("Job ID can't be empty")
 	}
 	if j.Desc.JobType == "" {
-		return fmt.Errorf("Job type cannot be empty")
+		return fmt.Errorf("Job type can't be empty")
 	}
 	if j.Desc.Payload == "" {
-		return fmt.Errorf("Payload cannot be empty")
+		return fmt.Errorf("Payload can't be empty")
 	}
 	return
 }

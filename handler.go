@@ -59,10 +59,16 @@ func (m *handler) Run() {
 			continue
 		}
 
+		// New source
+		s, err := c.GetSourceAttr().New()
+		if err != nil {
+			log.Fatal("Failed to new source type. Error: ", err)
+		}
+
 		// New worker
 		w := newWorker(c)
 		w.doneChan = m.doneChan
-		w.source = c.GetSourceAttr().New()
+		w.source = s
 		w.run()
 		m.workers[c.Name] = &w
 
@@ -142,7 +148,7 @@ func (m *handler) done() {
 // New job type
 func (m *handler) RegisterJobType(name string, jobType string, s sign) {
 	if name == "" || jobType == "" {
-		log.Fatal("Both source name and job type cannot be empty")
+		log.Fatal("Both source name and job type can't be empty")
 	}
 	// Prevent from panic due to name that is not in the config
 	if _, ok := m.workers[name]; !ok {

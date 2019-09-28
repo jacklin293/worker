@@ -2,13 +2,16 @@ package source
 
 import (
 	"errors"
+	"fmt"
+	"net/url"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
 const (
-	defaultWaitTimeSeconds = 20
+	defaultWaitTimeSeconds     = 20
+	defaultMaxNumberOfMessages = 1
 )
 
 // Implementation
@@ -35,14 +38,26 @@ type SQS struct {
 }
 
 func (c *sqsConfig) validate() error {
+	if c.QueueUrl == "" {
+		return errors.New("queue_url can't be empty")
+	}
+	if c.Region == "" {
+		return errors.New("region can't be empty")
+	}
+	if c.MaxNumberOfMessages < 0 || c.MaxNumberOfMessages > 10 {
+		return errors.New("max_number_of_messages can only be 1 to 10")
+	}
 	return nil
 }
 
-func (c *sqsConfig) New() Sourcer {
+func (c *sqsConfig) New() (s Sourcer, err error) {
 	var endpoint string
 	if c.UseLocalSqs {
 		// Remove the last slash
-		endpoint = c.QueueUrl
+		endpoint, err = c.getEndpoint()
+		if err != nil {
+			return nil, err
+		}
 	}
 	session := newAwsSession(c.Region, c.CredentialFilename, c.CredentialProfile, endpoint)
 
@@ -61,18 +76,30 @@ func (c *sqsConfig) New() Sourcer {
 		recInput.SetWaitTimeSeconds(c.WaitTimeSeconds)
 	}
 
-	s := &SQS{
+	s = &SQS{
 		service:             sqs.New(session),
 		config:              c,
 		receiveMessageInput: recInput,
 	}
-	return s
+	return
+}
+
+func (c *sqsConfig) getEndpoint() (endpoint string, err error) {
+	u, err := url.Parse(c.QueueUrl)
+	if err != nil {
+		return
+	}
+	endpoint = u.Scheme + "://" + u.Host
+	return
 }
 
 func (s *SQS) Send(msgs interface{}) (interface{}, error) {
 	var entries []*sqs.SendMessageBatchRequestEntry
-	for _, msg := range msgs.([][]byte) {
-		e := sqs.SendMessageBatchRequestEntry{MessageBody: aws.String(string(msg))}
+	for i, msg := range msgs.([][]byte) {
+		e := sqs.SendMessageBatchRequestEntry{
+			Id:          aws.String(fmt.Sprintf("Message-ID-%d", i)),
+			MessageBody: aws.String(string(msg)),
+		}
 		entries = append(entries, &e)
 	}
 	param := &sqs.SendMessageBatchInput{
@@ -89,18 +116,21 @@ func (s *SQS) Receive() (interface{}, error) {
 	}
 	messages := make([][]byte, len(resp.Messages))
 	receipts := make([]string, len(resp.Messages))
-	for _, msg := range resp.Messages {
-		messages = append(messages, []byte(msg.String()))
-		receipts = append(receipts, *msg.ReceiptHandle)
+	for i, msg := range resp.Messages {
+		messages[i] = []byte(*msg.Body)
+		receipts[i] = *msg.ReceiptHandle
 	}
-	s.Delete(receipts)
-	return resp, err
+	_, err = s.Delete(receipts)
+	return messages, err
 }
 
 func (s *SQS) Delete(receipts []string) (*sqs.DeleteMessageBatchOutput, error) {
 	var entries []*sqs.DeleteMessageBatchRequestEntry
-	for _, receipt := range receipts {
-		e := sqs.DeleteMessageBatchRequestEntry{ReceiptHandle: aws.String(receipt)}
+	for i, receipt := range receipts {
+		e := sqs.DeleteMessageBatchRequestEntry{
+			Id:            aws.String(fmt.Sprintf("Message-ID-%d", i)),
+			ReceiptHandle: aws.String(receipt),
+		}
 		entries = append(entries, &e)
 	}
 	param := &sqs.DeleteMessageBatchInput{
