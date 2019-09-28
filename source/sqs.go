@@ -69,32 +69,43 @@ func (c *sqsConfig) New() Sourcer {
 	return s
 }
 
-func (s *SQS) Send(msg []byte) error {
-	// New SendMessageInput
-	param := &sqs.SendMessageInput{
-		QueueUrl:    aws.String(s.config.QueueUrl),
-		MessageBody: aws.String(string(msg)),
+func (s *SQS) Send(msgs interface{}) (interface{}, error) {
+	var entries []*sqs.SendMessageBatchRequestEntry
+	for _, msg := range msgs.([][]byte) {
+		e := sqs.SendMessageBatchRequestEntry{MessageBody: aws.String(string(msg))}
+		entries = append(entries, &e)
 	}
-	_, err := s.service.SendMessage(param)
-	return err
+	param := &sqs.SendMessageBatchInput{
+		Entries:  entries,
+		QueueUrl: aws.String(s.config.QueueUrl),
+	}
+	return s.service.SendMessageBatch(param)
 }
 
-func (s *SQS) Receive() (messages [][]byte, err error) {
+func (s *SQS) Receive() (interface{}, error) {
 	resp, err := s.service.ReceiveMessage(s.receiveMessageInput)
 	if err != nil {
 		return nil, errors.New("Failed to receive messages from SQS. " + err.Error())
 	}
+	messages := make([][]byte, len(resp.Messages))
+	receipts := make([]string, len(resp.Messages))
 	for _, msg := range resp.Messages {
-		messages = append(messages, []byte(*msg.Body))
-		s.Delete(*msg.ReceiptHandle)
+		messages = append(messages, []byte(msg.String()))
+		receipts = append(receipts, *msg.ReceiptHandle)
 	}
-	return
+	s.Delete(receipts)
+	return resp, err
 }
 
-func (s *SQS) Delete(receiptHandle string) (*sqs.DeleteMessageOutput, error) {
-	param := &sqs.DeleteMessageInput{
-		QueueUrl:      aws.String(s.config.QueueUrl),
-		ReceiptHandle: aws.String(receiptHandle),
+func (s *SQS) Delete(receipts []string) (*sqs.DeleteMessageBatchOutput, error) {
+	var entries []*sqs.DeleteMessageBatchRequestEntry
+	for _, receipt := range receipts {
+		e := sqs.DeleteMessageBatchRequestEntry{ReceiptHandle: aws.String(receipt)}
+		entries = append(entries, &e)
 	}
-	return s.service.DeleteMessage(param)
+	param := &sqs.DeleteMessageBatchInput{
+		Entries:  entries,
+		QueueUrl: aws.String(s.config.QueueUrl),
+	}
+	return s.service.DeleteMessageBatch(param)
 }

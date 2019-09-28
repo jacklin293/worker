@@ -36,11 +36,10 @@ func (tj *TestJob) Run(j *Job) error {
 	time.Sleep(1 * time.Millisecond)
 	return nil
 }
-
 func (tj *TestJob) Done(j *Job, err error) {}
 
-func sendMessage(id int) []byte {
-	return []byte(fmt.Sprintf(`{"job_id":"test-job-id-%d","job_type":"test-job-type-1","payload":"{\"id\":\"%d\",\"now\":%d}"}`, id, id, time.Now().Unix()))
+func getMessage(id string) []byte {
+	return []byte(fmt.Sprintf(`{"job_id":"test-job-id-%s","job_type":"test-job-type-1","payload":"{\"id\":\"%s\",\"timestamp\":%d}"}`, id, id, time.Now().Unix()))
 }
 
 func BenchmarkLoops(b *testing.B) {
@@ -62,7 +61,7 @@ func BenchmarkLoops(b *testing.B) {
 		for i := 0; i < total; i++ {
 			wg.Add(1)
 			go func(i int) {
-				source.Send(sendMessage(i))
+				source.Send(getMessage("foo"))
 			}(i)
 		}
 	}(&wg, total)
@@ -96,7 +95,7 @@ func BenchmarkLoops1kJobs(b *testing.B) {
 			for i := 0; i < total; i++ {
 				wg.Add(1)
 				go func(i int) {
-					source.Send(sendMessage(i))
+					source.Send(getMessage("foo"))
 				}(i)
 			}
 		}(&wg, total)

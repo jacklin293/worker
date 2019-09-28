@@ -6,23 +6,33 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewGoChannel(t *testing.T) {
-	c := newGoChannel(0)
-	assert.NotNil(t, c)
+func TestValidate(t *testing.T) {
+	c := goChannelConfig{Size: 0}
+	assert.Nil(t, c.validate())
+}
+
+func TestNew(t *testing.T) {
+	c := goChannelConfig{Size: 2}
+	s := c.New()
+	assert.NotNil(t, s)
+	assert.Equal(t, 0, s.(*GoChannel).Len()) // channel is empty
 }
 
 func TestSend(t *testing.T) {
-	c := newGoChannel(3)
-	c.Send([]byte("a"))
-	c.Send([]byte("b"))
-	c.Send([]byte("c"))
-	assert.Equal(t, 3, len(c.ch))
+	expected := 3
+	c := goChannelConfig{Size: int64(expected)}
+	s := c.New()
+	for i := 0; i < expected; i++ {
+		s.Send([]byte("foo"))
+	}
+	assert.Equal(t, expected, s.(*GoChannel).Len())
 }
 
 func TestReceive(t *testing.T) {
-	c := newGoChannel(1)
-	c.Send([]byte("a"))
-	s, err := c.Receive()
+	c := goChannelConfig{Size: 1}
+	s := c.New()
+	s.Send([]byte("a"))
+	msg, err := s.Receive()
 	assert.Nil(t, err)
-	assert.Equal(t, []byte("a"), s[0])
+	assert.Equal(t, []byte("a"), msg.([]byte))
 }

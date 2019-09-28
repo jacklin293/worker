@@ -42,14 +42,13 @@ type Descriptor struct {
 	JobType string `json:"job_type"` // e.g. curl
 
 	// Task body of task
-	// TODO map[string]interface{} or string
-	Payload string `json:"payload"`
+	Payload interface{} `json:"payload"`
 
 	// TODO
 	Timestamp int64 `json:"timestamp"`
 
 	// TODO
-	RetryTimes int `json:"retry_times"`
+	RetryCount int64 `json:"retry_count"`
 
 	// TODO
 	SQS struct {
@@ -72,11 +71,6 @@ func (j *Job) validate() (err error) {
 }
 
 func (j *Job) process(s sign) {
-	defer func(j *Job) {
-		if e := recover(); e != nil {
-			j.doneChan <- j
-		}
-	}(j)
 	j.didAt = time.Now()
 	jb := s()
 	err := jb.Run(j)

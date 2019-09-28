@@ -76,18 +76,36 @@ func (m *handler) Run() {
 
 func (m *handler) receive(w *worker) {
 	for {
-		msgs, err := w.source.Receive()
+		message, err := w.source.Receive()
 		if err != nil {
 			log.Println("Error: ", err)
 			continue
 		}
-		if len(msgs) == 0 {
-			continue
-		}
-		for _, msg := range msgs {
+
+		// Check the type of return from Receive()
+		switch message.(type) {
+		case [][]byte:
+			if len(message.([][]byte)) == 0 {
+				continue
+			}
+			for _, msg := range message.([][]byte) {
+				var j Job
+				if err = m.processMessage(w, msg, &j); err != nil {
+					log.Printf("Error: %s, message: %s\n", err, string(msg))
+				}
+			}
+		case []byte:
+			if len(message.([]byte)) == 0 {
+				continue
+			}
 			var j Job
-			if err = m.processMessage(w, msg, &j); err != nil {
-				log.Printf("Error: %s, message: %s\n", err, string(msg))
+			if err = m.processMessage(w, message.([]byte), &j); err != nil {
+				log.Printf("Error: %s, message: %s\n", err, string(message.([]byte)))
+			}
+		default:
+			if err != nil {
+				log.Println("Error: unknown type of return from Receive()")
+				continue
 			}
 		}
 	}

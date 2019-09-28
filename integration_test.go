@@ -28,7 +28,7 @@ var singleTopicConfig = `[
 ]`
 
 func getMessage(id string) []byte {
-	return []byte(fmt.Sprintf(`{"job_id":"test-job-id-%s","job_type":"test-job-type-1","payload":"{\"id\":\"%s\",\"now\":%d}"}`, id, id, time.Now().Unix()))
+	return []byte(fmt.Sprintf(`{"job_id":"test-job-id-%s","job_type":"test-job-type-1","payload":"{\"id\":\"%s\",\"timestamp\":%d}"}`, id, id, time.Now().Unix()))
 }
 
 // ------------------------------------------------------------------
@@ -135,20 +135,20 @@ func TestErrJob(t *testing.T) {
 // ------------------------------------------------------------------
 
 // Test pointer misuse (run)
-type TestPointerMisuseRun struct {
+type TestStructPointerMisuseRun struct {
 	ID       string `json:"id"`
 	ReturnCh chan string
 }
 
-func (tj *TestPointerMisuseRun) Run(j *Job) error {
-	json.Unmarshal([]byte(j.Desc.Payload), &tj)
+func (tj *TestStructPointerMisuseRun) Run(j *Job) error {
+	json.Unmarshal([]byte(j.Desc.Payload.(string)), &tj)
 	time.Sleep(300 * time.Millisecond)
 	tj.ReturnCh <- tj.ID
 	return nil
 }
-func (tj *TestPointerMisuseRun) Done(j *Job, err error) {}
+func (tj *TestStructPointerMisuseRun) Done(j *Job, err error) {}
 
-func TestPointerMisuseRunJob(t *testing.T) {
+func TestStructPointerMisuseRunJob(t *testing.T) {
 	doneCh := make(chan *Job)
 
 	// New handler
@@ -161,7 +161,7 @@ func TestPointerMisuseRunJob(t *testing.T) {
 	// Initialise job
 	returnCh := make(chan string)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
-		return &TestPointerMisuseRun{ReturnCh: returnCh}
+		return &TestStructPointerMisuseRun{ReturnCh: returnCh}
 	})
 
 	// Expected ID
@@ -181,19 +181,19 @@ func TestPointerMisuseRunJob(t *testing.T) {
 // ------------------------------------------------------------------
 
 // Test pointer misuse (done)
-type TestPointerMisuseDone struct {
+type TestStructPointerMisuseDone struct {
 	ID       string `json:"id"`
 	ReturnCh chan string
 }
 
-func (tj *TestPointerMisuseDone) Run(j *Job) error {
-	json.Unmarshal([]byte(j.Desc.Payload), &tj)
+func (tj *TestStructPointerMisuseDone) Run(j *Job) error {
+	json.Unmarshal([]byte(j.Desc.Payload.(string)), &tj)
 	time.Sleep(300 * time.Millisecond)
 	return nil
 }
-func (tj *TestPointerMisuseDone) Done(j *Job, err error) { tj.ReturnCh <- tj.ID }
+func (tj *TestStructPointerMisuseDone) Done(j *Job, err error) { tj.ReturnCh <- tj.ID }
 
-func TestPointerMisuseDoneJob(t *testing.T) {
+func TestStructPointerMisuseDoneJob(t *testing.T) {
 	doneCh := make(chan *Job)
 
 	// New handler
@@ -206,7 +206,7 @@ func TestPointerMisuseDoneJob(t *testing.T) {
 	// Initialise job
 	returnCh := make(chan string)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
-		return &TestPointerMisuseDone{ReturnCh: returnCh}
+		return &TestStructPointerMisuseDone{ReturnCh: returnCh}
 	})
 
 	// Expected ID
@@ -227,21 +227,21 @@ func TestPointerMisuseDoneJob(t *testing.T) {
 // ------------------------------------------------------------------
 
 // Test pointer misuse (custom)
-type TestPointerMisuseCustom struct {
+type TestStructPointerMisuseCustom struct {
 	ID       string `json:"id"`
 	ReturnCh chan string
 }
 
-func (tj *TestPointerMisuseCustom) Run(j *Job) error {
-	json.Unmarshal([]byte(j.Desc.Payload), &tj)
+func (tj *TestStructPointerMisuseCustom) Run(j *Job) error {
+	json.Unmarshal([]byte(j.Desc.Payload.(string)), &tj)
 	time.Sleep(300 * time.Millisecond)
 	tj.Custom()
 	return nil
 }
-func (tj *TestPointerMisuseCustom) Done(j *Job, err error) {}
-func (tj *TestPointerMisuseCustom) Custom()                { tj.ReturnCh <- tj.ID }
+func (tj *TestStructPointerMisuseCustom) Done(j *Job, err error) {}
+func (tj *TestStructPointerMisuseCustom) Custom()                { tj.ReturnCh <- tj.ID }
 
-func TestPointerMisuseCustomJob(t *testing.T) {
+func TestStructPointerMisuseCustomJob(t *testing.T) {
 	doneCh := make(chan *Job)
 
 	// New handler
@@ -254,7 +254,7 @@ func TestPointerMisuseCustomJob(t *testing.T) {
 	// Initialise job
 	returnCh := make(chan string)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
-		return &TestPointerMisuseCustom{ReturnCh: returnCh}
+		return &TestStructPointerMisuseCustom{ReturnCh: returnCh}
 	})
 
 	// Expected ID
@@ -275,23 +275,23 @@ func TestPointerMisuseCustomJob(t *testing.T) {
 // ------------------------------------------------------------------
 
 // Test pointer misuse (custom)
-type TestPointerMisuseDoneCustom struct {
+type TestStructPointerMisuseDoneCustom struct {
 	ID       string `json:"id"`
 	ReturnCh chan string
 }
 
-func (tj *TestPointerMisuseDoneCustom) Run(j *Job) error {
-	json.Unmarshal([]byte(j.Desc.Payload), &tj)
+func (tj *TestStructPointerMisuseDoneCustom) Run(j *Job) error {
+	json.Unmarshal([]byte(j.Desc.Payload.(string)), &tj)
 	time.Sleep(300 * time.Millisecond)
 	return nil
 }
-func (tj *TestPointerMisuseDoneCustom) Done(j *Job, err error) {
+func (tj *TestStructPointerMisuseDoneCustom) Done(j *Job, err error) {
 	tj.ID = tj.ID + "/done"
 	tj.Custom()
 }
-func (tj *TestPointerMisuseDoneCustom) Custom() { tj.ReturnCh <- tj.ID }
+func (tj *TestStructPointerMisuseDoneCustom) Custom() { tj.ReturnCh <- tj.ID }
 
-func TestPointerMisuseDoneCustomJob(t *testing.T) {
+func TestStructPointerMisuseDoneCustomJob(t *testing.T) {
 	doneCh := make(chan *Job)
 
 	// New handler
@@ -304,7 +304,7 @@ func TestPointerMisuseDoneCustomJob(t *testing.T) {
 	// Initialise job
 	returnCh := make(chan string)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
-		return &TestPointerMisuseDoneCustom{ReturnCh: returnCh}
+		return &TestStructPointerMisuseDoneCustom{ReturnCh: returnCh}
 	})
 
 	// Expected ID
@@ -320,6 +320,115 @@ func TestPointerMisuseDoneCustomJob(t *testing.T) {
 	assert.Equal(t, expectedID2+"/done", <-returnCh)
 	<-doneCh
 	<-doneCh
+}
+
+// ------------------------------------------------------------------
+
+// Test panic in Run
+type TestPanicRun struct{}
+
+func (tj *TestPanicRun) Run(j *Job) error {
+	panic("panic in Run")
+	return nil
+}
+func (tj *TestPanicRun) Done(j *Job, err error) {}
+
+func TestPanicRunJob(t *testing.T) {
+	doneCh := make(chan *Job)
+
+	// New handler
+	m := New()
+	m.SetConfigWithJSON(singleTopicConfig)
+	m.SetNotifyChan(doneCh)
+	m.Run()
+	source, _ := m.GetSourceByName("queue-1")
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+		return &TestPanicRun{}
+	})
+
+	// Prepare the message and expected job struct
+	msg := getMessage("foo")
+	expected := Job{}
+	json.Unmarshal(msg, &expected.Desc)
+
+	// Send the message
+	source.Send(msg)
+	time.Sleep(1 * time.Millisecond)
+
+	// Returned job (converted from message)
+	result := <-doneCh
+	assert.Equal(t, expected.Desc.Payload, result.Desc.Payload)
+}
+
+// ------------------------------------------------------------------
+
+// Test panic in Done
+type TestPanicDone struct{}
+
+func (tj *TestPanicDone) Run(j *Job) error       { return nil }
+func (tj *TestPanicDone) Done(j *Job, err error) { panic("panic in Done") }
+
+func TestPanicDoneJob(t *testing.T) {
+	doneCh := make(chan *Job)
+
+	// New handler
+	m := New()
+	m.SetConfigWithJSON(singleTopicConfig)
+	m.SetNotifyChan(doneCh)
+	m.Run()
+	source, _ := m.GetSourceByName("queue-1")
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+		return &TestPanicDone{}
+	})
+
+	// Prepare the message and expected job struct
+	msg := getMessage("foo")
+	expected := Job{}
+	json.Unmarshal(msg, &expected.Desc)
+
+	// Send the message
+	source.Send(msg)
+	time.Sleep(1 * time.Millisecond)
+
+	// Returned job (converted from message)
+	result := <-doneCh
+	assert.Equal(t, expected.Desc.Payload, result.Desc.Payload)
+}
+
+// ------------------------------------------------------------------
+
+// Test panic in Done
+type TestPanicCustom struct{}
+
+func (tj *TestPanicCustom) Run(j *Job) error       { return nil }
+func (tj *TestPanicCustom) Done(j *Job, err error) { tj.Custom() }
+func (tj *TestPanicCustom) Custom()                { panic("panic in Custom") }
+
+func TestPanicCustomJob(t *testing.T) {
+	doneCh := make(chan *Job)
+
+	// New handler
+	m := New()
+	m.SetConfigWithJSON(singleTopicConfig)
+	m.SetNotifyChan(doneCh)
+	m.Run()
+	source, _ := m.GetSourceByName("queue-1")
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+		return &TestPanicCustom{}
+	})
+
+	// Prepare the message and expected job struct
+	msg := getMessage("foo")
+	expected := Job{}
+	json.Unmarshal(msg, &expected.Desc)
+
+	// Send the message
+	source.Send(msg)
+	time.Sleep(1 * time.Millisecond)
+
+	// Returned job (converted from message)
+	result := <-doneCh
+	assert.Equal(t, expected.Desc.Payload, result.Desc.Payload)
 }
 
 // ------------------------------------------------------------------
