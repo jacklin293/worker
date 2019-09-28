@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"sync"
 	"time"
 	"worker/source"
 )
@@ -13,7 +12,6 @@ import (
 type handler struct {
 	workers map[string]*worker
 	config  []*source.Config
-	jobPool *sync.Pool
 
 	// TODO
 	// sqs struct {
@@ -33,11 +31,6 @@ func New() *handler { // FIXME func should be named as Project name
 	var m handler
 	m.workers = make(map[string]*worker)
 	m.doneChan = make(chan *Job)
-	m.jobPool = &sync.Pool{
-		New: func() interface{} {
-			return &Job{}
-		},
-	}
 	return &m
 }
 
@@ -83,36 +76,36 @@ func (m *handler) Run() {
 
 func (m *handler) receive(w *worker) {
 	for {
-		messages, err := w.source.Receive()
+		msgs, err := w.source.Receive()
 		if err != nil {
 			log.Println("Error: ", err)
 			continue
 		}
-		if len(messages) == 0 {
+		if len(msgs) == 0 {
 			continue
 		}
-		for _, msg := range messages {
+		for _, msg := range msgs {
 			var j Job
-			if err = m.processMessage(w.config, &msg, &j); err != nil {
+			if err = m.processMessage(w, msg, &j); err != nil {
 				log.Printf("Error: %s, message: %s\n", err, string(msg))
 			}
 		}
 	}
 }
 
-func (m *handler) processMessage(c *source.Config, msg *[]byte, j *Job) (err error) {
-	if err = json.Unmarshal(*msg, &j.Desc); err != nil {
+func (m *handler) processMessage(w *worker, msg []byte, j *Job) (err error) {
+	if err = json.Unmarshal(msg, &j.Desc); err != nil {
 		return
 	}
 	if err = j.validate(); err != nil {
 		return
 	}
-	if _, ok := m.workers[c.Name].jobTypes[j.Desc.JobType]; !ok {
-		log.Printf("Job type '%s'.'%s' not found\n", c.Name, j.Desc.JobType)
+	if _, ok := w.jobTypes[j.Desc.JobType]; !ok {
+		log.Printf("Job type '%s'.'%s' not found\n", w.config.Name, j.Desc.JobType)
 		return
 	}
 	j.receivedAt = time.Now()
-	m.workers[c.Name].receivedChan <- j
+	w.receivedChan <- j
 	return
 }
 

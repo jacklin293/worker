@@ -49,17 +49,17 @@ func (w *worker) process(i int64, j *Job) {
 
 	j.doneChan = w.doneChan
 
-	w.updateJobStatus(true, i, j)
+	w.flagJobStatus(true, i, j)
 	j.process(w.jobTypes[j.Desc.JobType])
-	w.updateJobStatus(false, i, j)
+	w.flagJobStatus(false, i, j)
 }
 
-func (w *worker) updateJobStatus(b bool, i int64, j *Job) {
+func (w *worker) flagJobStatus(b bool, i int64, j *Job) {
 	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	if b {
 		w.status[i] = j
-	} else {
-		delete(w.status, i)
+		return
 	}
-	w.mutex.Unlock()
+	delete(w.status, i)
 }
