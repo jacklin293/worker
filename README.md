@@ -1,3 +1,19 @@
+# Introduction
+
+TODO
+
+# Running testing
+
+    make unit
+    make integration
+
+# Contribute
+
+Build development environment
+
+    make build
+
+
 # Benchmark
 
 ### pprof
@@ -25,11 +41,3 @@ Command
 
     make bench
     make torch
-
-### Contribute
-
-Build development environment
-
-    make build
-
-

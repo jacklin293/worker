@@ -3,9 +3,11 @@
 quick:
 	go test -v -tags=integration -run TestBasicJob
 unit:
-	go test -v -tags=unit ./... -cover
+	go test -v -tags=unit -cover
+	go test -v -tags=unit queue/* -cover
 integration:
-	go test -v -tags=integration ./... -cover
+	go test -v -tags=integration -cover
+	go test -v -tags=integration queue/* -cover
 cover:
 	go test -v -tags=unit ./... -coverprofile=unit-coverage.out
 	go tool cover -html=unit-coverage.out

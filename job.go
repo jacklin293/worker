@@ -15,9 +15,6 @@ type process func() Process
 type Job struct {
 	Desc Descriptor
 
-	// TODO
-	// Log *io.Writer
-
 	doneChan chan *Job
 
 	receivedAt time.Time
@@ -25,12 +22,8 @@ type Job struct {
 	doneAt     time.Time
 	duration   time.Duration
 
-	// TODO [Optional] SQS message description
-	// sqs struct {
-	//	MessageID     string
-	//	MD5OfBody     string
-	//	ReceiptHandle string
-	// }
+	// TODO
+	// Log *io.Writer
 }
 
 type Descriptor struct {

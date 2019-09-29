@@ -12,30 +12,22 @@ type worker struct {
 	jobTypes     map[string]process
 	receivedChan chan *Job
 	doneChan     chan *Job
-	status       map[int64]*Job
-	mutex        sync.RWMutex
+	workerStatus *workerStatus
 
 	// TODO
 	// log *io.Writer
 }
 
-func newWorker(c *queue.Config) *worker {
-	return &worker{
-		config:       c,
-		receivedChan: make(chan *Job),
-		jobTypes:     make(map[string]process),
-		status:       make(map[int64]*Job, c.WorkerConcurrency),
-	}
+type workerStatus struct {
+	table map[int64]*Job
+	mutex sync.RWMutex
 }
 
-func (w *worker) run() {
-	for i := int64(0); i < w.config.WorkerConcurrency; i++ {
-		go func(w *worker, i int64) {
-			for {
-				j := <-w.receivedChan
-				w.process(i, j)
-			}
-		}(w, i)
+func newWorker(concurrency int64) *worker {
+	return &worker{
+		receivedChan: make(chan *Job),
+		jobTypes:     make(map[string]process),
+		workerStatus: &workerStatus{table: make(map[int64]*Job, concurrency)},
 	}
 }
 
@@ -49,17 +41,17 @@ func (w *worker) process(i int64, j *Job) {
 
 	j.doneChan = w.doneChan
 
-	w.flagJobStatus(true, i, j)
+	w.flagWorkerStatus(true, i, j)
 	j.process(w.jobTypes[j.Desc.JobType])
-	w.flagJobStatus(false, i, j)
+	w.flagWorkerStatus(false, i, j)
 }
 
-func (w *worker) flagJobStatus(b bool, i int64, j *Job) {
-	w.mutex.Lock()
-	defer w.mutex.Unlock()
+func (w *worker) flagWorkerStatus(b bool, i int64, j *Job) {
+	w.workerStatus.mutex.Lock()
+	defer w.workerStatus.mutex.Unlock()
 	if b {
-		w.status[i] = j
+		w.workerStatus.table[i] = j
 		return
 	}
-	delete(w.status, i)
+	delete(w.workerStatus.table, i)
 }

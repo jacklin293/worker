@@ -4,19 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"time"
 	"worker/queue"
 )
 
 // ProjectName
-type handler struct {
-	workers map[string]*worker
-	config  []*queue.Config
+type Handler struct {
+	fetchers map[string][]*fetcher
+	workers  map[string]*worker
+	config   []*queue.Config
 
-	// TODO
-	// sqs struct {
-	//	VisibleChan chan *Job
-	// }
 	doneChan chan *Job
 
 	// When job is done, notify someone whom is interested in.
@@ -27,29 +23,30 @@ type handler struct {
 	// log *io.Writer
 }
 
-func New() *handler { // FIXME func should be named as Project name
-	var m handler
-	m.workers = make(map[string]*worker)
-	m.doneChan = make(chan *Job)
-	return &m
+func New() *Handler { // FIXME func should be named as Project name
+	var h Handler
+	h.fetchers = make(map[string][]*fetcher)
+	h.workers = make(map[string]*worker)
+	h.doneChan = make(chan *Job)
+	return &h
 }
 
 // Initialisation with config in json
-func (m *handler) InitWithJsonConfig(conf string) {
-	if err := json.Unmarshal([]byte(conf), &m.config); err != nil {
+func (h *Handler) InitWithJsonConfig(conf string) {
+	if err := json.Unmarshal([]byte(conf), &h.config); err != nil {
 		log.Fatalf("Failed to set config. Error: %v\n", err)
 	}
-	if len(m.config) == 0 {
+	if len(h.config) == 0 {
 		log.Fatal("No queues found")
 	}
 
-	for _, c := range m.config {
+	for _, c := range h.config {
 		if err := c.Validate(); err != nil {
 			log.Fatal("Failed to set config. Error: ", err)
 		}
 	}
 
-	for _, c := range m.config {
+	for _, c := range h.config {
 		if !c.Enabled {
 			continue
 		}
@@ -61,128 +58,120 @@ func (m *handler) InitWithJsonConfig(conf string) {
 		}
 
 		// New worker
-		w, ok := m.workers[c.Name]
+		w, ok := h.workers[c.Name]
 		if !ok {
-			w = newWorker(c)
-			m.workers[c.Name] = w
+			w = newWorker(c.WorkerConcurrency)
+			h.workers[c.Name] = w
 		}
-		w.doneChan = m.doneChan
+		w.config = c
 		w.queue = q
+		w.doneChan = h.doneChan
 	}
 }
 
-func (m *handler) Run() {
-	if m.config == nil {
+func (h *Handler) Run() {
+	if h.config == nil {
 		log.Fatal("Please set config before running")
 	}
-	for _, c := range m.config {
+	for _, c := range h.config {
 		if !c.Enabled {
 			continue
 		}
-		w := m.workers[c.Name]
-		w.run()
-
-		// Receive messages
-		for i := int64(0); i < c.QueueConcurrency; i++ {
-			go m.receive(w)
-		}
+		h.runWorkers(c)
+		h.runFetchers(c)
 	}
-	go m.done()
+	go h.done()
 }
 
-func (m *handler) receive(w *worker) {
+// Process messages
+func (h *Handler) runWorkers(c *queue.Config) {
+	w := h.workers[c.Name]
+	for i := int64(0); i < c.WorkerConcurrency; i++ {
+		go func(w *worker, i int64) {
+			for {
+				j := <-w.receivedChan
+				w.process(i, j)
+			}
+		}(w, i)
+	}
+}
+
+// Receive messages
+func (h *Handler) runFetchers(c *queue.Config) {
+	w := h.workers[c.Name]
+	for i := int64(0); i < c.QueueConcurrency; i++ {
+		f := newFetcher()
+		f.worker = w
+		h.fetchers[c.Name] = append(h.fetchers[c.Name], f)
+		go f.receive()
+	}
+}
+
+func (h *Handler) done() {
 	for {
-		message, err := w.queue.Receive()
-		if err != nil {
-			log.Println("Error: ", err)
-			continue
-		}
-
-		// Check the type of return from Receive()
-		switch message.(type) {
-		case [][]byte:
-			if len(message.([][]byte)) == 0 {
-				continue
-			}
-			for _, msg := range message.([][]byte) {
-				var j Job
-				if err = m.processMessage(w, msg, &j); err != nil {
-					log.Printf("Error: %s, message: %s\n", err, string(msg))
-				}
-			}
-		case []byte:
-			if len(message.([]byte)) == 0 {
-				continue
-			}
-			var j Job
-			if err = m.processMessage(w, message.([]byte), &j); err != nil {
-				log.Printf("Error: %s, message: %s\n", err, string(message.([]byte)))
-			}
-		default:
-			log.Println("Error: unknown type of return from Receive()")
-			continue
-		}
-	}
-}
-
-func (m *handler) processMessage(w *worker, msg []byte, j *Job) (err error) {
-	if err = json.Unmarshal(msg, &j.Desc); err != nil {
-		return
-	}
-	if err = j.validate(); err != nil {
-		return
-	}
-	if _, ok := w.jobTypes[j.Desc.JobType]; !ok {
-		log.Printf("Job type '%s'.'%s' not found\n", w.config.Name, j.Desc.JobType)
-		return
-	}
-	j.receivedAt = time.Now()
-	w.receivedChan <- j
-	return
-}
-
-func (m *handler) done() {
-	for {
-		j := <-m.doneChan
-		if m.notifyChan != nil {
-			go func(m *handler, j *Job) {
-				m.notifyChan <- j
-			}(m, j)
+		j := <-h.doneChan
+		if h.notifyChan != nil {
+			go func(h *Handler, j *Job) {
+				h.notifyChan <- j
+			}(h, j)
 		}
 		// TODO Graceful shutdown
 	}
 }
 
 // New job type
-func (m *handler) RegisterJobType(name string, jobType string, p process) {
+func (h *Handler) RegisterJobType(name string, jobType string, p process) {
 	if name == "" || jobType == "" {
 		log.Fatal("Both queue name and job type can't be empty")
 	}
 	// Prevent panic from not being in the list of config
-	if _, ok := m.workers[name]; !ok {
+	if _, ok := h.workers[name]; !ok {
 		return
 	}
-	m.workers[name].jobTypes[jobType] = p
+	h.workers[name].jobTypes[jobType] = p
 }
 
-func (m *handler) GetJobTypes() (mm map[string][]string) {
-	mm = make(map[string][]string)
-	for t, w := range m.workers {
+func (h *Handler) GetFetcherNum() map[string]int {
+	mm := make(map[string]int)
+	for n, fetchers := range h.fetchers {
+		mm[n] = len(fetchers)
+	}
+	return mm
+}
+
+func (h *Handler) GetWorkerStatus() map[string][]Job {
+	mm := make(map[string][]Job)
+	for name, w := range h.workers {
+		mm[name] = make([]Job, w.config.WorkerConcurrency)
+		w.workerStatus.mutex.RLock()
+		for i := int64(0); i < w.config.WorkerConcurrency; i++ {
+			if job, ok := w.workerStatus.table[i]; ok {
+				mm[name][i] = *job
+			}
+		}
+		w.workerStatus.mutex.RUnlock()
+	}
+	return mm
+}
+
+func (h *Handler) GetJobTypeList() map[string][]string {
+	mm := make(map[string][]string)
+	for n, w := range h.workers {
 		for typ := range w.jobTypes {
-			mm[t] = append(mm[t], typ)
+			mm[n] = append(mm[n], typ)
 		}
 	}
-	return
+	return mm
 }
 
-func (m *handler) SetNotifyChan(ch chan *Job) {
-	m.notifyChan = ch
+func (h *Handler) SetNotifyChan(ch chan *Job) {
+	h.notifyChan = ch
 }
 
 // Queue name
-func (m *handler) GetQueueByName(name string) (queue.Queuer, error) {
-	if _, ok := m.workers[name]; ok {
-		return m.workers[name].queue, nil
+func (h *Handler) GetQueueByName(name string) (queue.Queuer, error) {
+	if _, ok := h.workers[name]; ok {
+		return h.workers[name].queue, nil
 	}
 	return nil, fmt.Errorf("Failed to get queue. Error: queue name not matched")
 }
