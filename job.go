@@ -5,12 +5,12 @@ import (
 	"time"
 )
 
-type Contract interface {
+type Process interface {
 	Run(*Job) error
 	Done(*Job, error)
 }
 
-type sign func() Contract
+type process func() Process
 
 type Job struct {
 	Desc Descriptor
@@ -70,15 +70,15 @@ func (j *Job) validate() (err error) {
 	return
 }
 
-func (j *Job) process(s sign) {
+func (j *Job) process(p process) {
 	j.didAt = time.Now()
-	jb := s()
+	jb := p()
 	err := jb.Run(j)
 	j.done(jb, err)
 	j.doneChan <- j
 }
 
-func (j *Job) done(jb Contract, err error) {
+func (j *Job) done(jb Process, err error) {
 	j.doneAt = time.Now()
 	j.duration = j.doneAt.Sub(j.receivedAt)
 	jb.Done(j, err)

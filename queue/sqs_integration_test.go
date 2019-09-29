@@ -1,6 +1,6 @@
 // +build integration
 
-package source
+package queue
 
 import (
 	"testing"
@@ -11,7 +11,7 @@ import (
 
 func TestSqsBasicSendAndReceive(t *testing.T) {
 	c := sqsConfig{
-		QueueUrl:    "http://localhost:4100/100010001000/source-integration-test",
+		QueueUrl:    "http://localhost:4100/100010001000/queue-integration-test",
 		UseLocalSqs: true,
 		Region:      "us-east-1",
 	}
@@ -41,7 +41,7 @@ func TestSqsBasicSendAndReceive(t *testing.T) {
 
 func TestSqsMessagesOfSendAndReceive(t *testing.T) {
 	c := sqsConfig{
-		QueueUrl:            "http://localhost:4100/100010001000/source-integration-test",
+		QueueUrl:            "http://localhost:4100/100010001000/queue-integration-test",
 		UseLocalSqs:         true,
 		Region:              "us-east-1",
 		MaxNumberOfMessages: 10,
@@ -98,7 +98,7 @@ func TestSqsReceiveBehaviours(t *testing.T) {
 	}
 	for _, tt := range tests {
 		c := sqsConfig{
-			QueueUrl:            "http://localhost:4100/100010001000/source-integration-test",
+			QueueUrl:            "http://localhost:4100/100010001000/queue-integration-test",
 			UseLocalSqs:         true,
 			Region:              "us-east-1",
 			MaxNumberOfMessages: tt.maxNumberOfMessages,

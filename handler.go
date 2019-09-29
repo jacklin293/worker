@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"log"
 	"time"
-	"worker/source"
+	"worker/queue"
 )
 
 // ProjectName
 type handler struct {
 	workers map[string]*worker
-	config  []*source.Config
+	config  []*queue.Config
 
 	// TODO
 	// sqs struct {
@@ -40,7 +40,7 @@ func (m *handler) InitWithJsonConfig(conf string) {
 		log.Fatalf("Failed to set config. Error: %v\n", err)
 	}
 	if len(m.config) == 0 {
-		log.Fatal("No any sources found")
+		log.Fatal("No queues found")
 	}
 
 	for _, c := range m.config {
@@ -54,10 +54,10 @@ func (m *handler) InitWithJsonConfig(conf string) {
 			continue
 		}
 
-		// New source
-		s, err := c.GetSourceAttr().New()
+		// New queue
+		q, err := c.GetQueueAttr().New()
 		if err != nil {
-			log.Fatal("Failed to new source type. Error: ", err)
+			log.Fatal("Failed to new queue. Error: ", err)
 		}
 
 		// New worker
@@ -67,7 +67,7 @@ func (m *handler) InitWithJsonConfig(conf string) {
 			m.workers[c.Name] = w
 		}
 		w.doneChan = m.doneChan
-		w.source = s
+		w.queue = q
 	}
 }
 
@@ -83,7 +83,7 @@ func (m *handler) Run() {
 		w.run()
 
 		// Receive messages
-		for i := int64(0); i < c.SourceConcurrency; i++ {
+		for i := int64(0); i < c.QueueConcurrency; i++ {
 			go m.receive(w)
 		}
 	}
@@ -92,7 +92,7 @@ func (m *handler) Run() {
 
 func (m *handler) receive(w *worker) {
 	for {
-		message, err := w.source.Receive()
+		message, err := w.queue.Receive()
 		if err != nil {
 			log.Println("Error: ", err)
 			continue
@@ -154,15 +154,15 @@ func (m *handler) done() {
 }
 
 // New job type
-func (m *handler) RegisterJobType(name string, jobType string, s sign) {
+func (m *handler) RegisterJobType(name string, jobType string, p process) {
 	if name == "" || jobType == "" {
-		log.Fatal("Both source name and job type can't be empty")
+		log.Fatal("Both queue name and job type can't be empty")
 	}
 	// Prevent panic from not being in the list of config
 	if _, ok := m.workers[name]; !ok {
 		return
 	}
-	m.workers[name].jobTypes[jobType] = s
+	m.workers[name].jobTypes[jobType] = p
 }
 
 func (m *handler) GetJobTypes() (mm map[string][]string) {
@@ -179,10 +179,10 @@ func (m *handler) SetNotifyChan(ch chan *Job) {
 	m.notifyChan = ch
 }
 
-// Source name
-func (m *handler) GetSourceByName(name string) (source.Sourcer, error) {
+// Queue name
+func (m *handler) GetQueueByName(name string) (queue.Queuer, error) {
 	if _, ok := m.workers[name]; ok {
-		return m.workers[name].source, nil
+		return m.workers[name].queue, nil
 	}
-	return nil, fmt.Errorf("Failed to get source. Error: source name not matched")
+	return nil, fmt.Errorf("Failed to get queue. Error: queue name not matched")
 }

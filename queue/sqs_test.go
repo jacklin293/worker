@@ -1,6 +1,6 @@
 // +build unit
 
-package source
+package queue
 
 import (
 	"testing"

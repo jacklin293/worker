@@ -17,8 +17,8 @@ import (
 var goChannelConfig = `[
 	{
 		"name":"queue-1",
-		"source_type":"go_channel",
-		"source_concurrency": 3,
+		"queue_type":"go_channel",
+		"queue_concurrency": 3,
 		"worker_concurrency":100,
 		"enabled":true,
 		"go_channel": {
@@ -30,8 +30,8 @@ var goChannelConfig = `[
 var sqsConfig = `[
 	{
 		"name":"queue-1",
-		"source_type":"sqs",
-		"source_concurrency": 1,
+		"queue_type":"sqs",
+		"queue_concurrency": 3,
 		"worker_concurrency":100,
 		"enabled":true,
 		"sqs": {
@@ -63,11 +63,11 @@ func TestBasicJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process {
 		return &TestBasic{}
 	})
 	m.Run()
-	s, _ := m.GetSourceByName("queue-1")
+	s, _ := m.GetQueueByName("queue-1")
 
 	// Prepare the message and expected job struct
 	msg := getMessage("foo")
@@ -105,11 +105,11 @@ func TestDoneJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process {
 		return &TestDone{ReturnCh: returnCh}
 	})
 	m.Run()
-	s, _ := m.GetSourceByName("queue-1")
+	s, _ := m.GetQueueByName("queue-1")
 
 	// Send the message
 	s.Send(getMessage("foo"))
@@ -136,11 +136,11 @@ func TestErrJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process {
 		return &TestErr{ReturnCh: returnCh}
 	})
 	m.Run()
-	s, _ := m.GetSourceByName("queue-1")
+	s, _ := m.GetQueueByName("queue-1")
 
 	// Send the message
 	s.Send(getMessage("foo"))
@@ -173,11 +173,11 @@ func TestStructPointerMisuseRunJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process {
 		return &TestStructPointerMisuseRun{ReturnCh: returnCh}
 	})
 	m.Run()
-	s, _ := m.GetSourceByName("queue-1")
+	s, _ := m.GetQueueByName("queue-1")
 
 	// Expected ID
 	expectedID1 := "foo"
@@ -216,11 +216,11 @@ func TestStructPointerMisuseDoneJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process {
 		return &TestStructPointerMisuseDone{ReturnCh: returnCh}
 	})
 	m.Run()
-	s, _ := m.GetSourceByName("queue-1")
+	s, _ := m.GetQueueByName("queue-1")
 
 	// Expected ID
 	expectedID1 := "foo"
@@ -261,11 +261,11 @@ func TestStructPointerMisuseCustomJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process {
 		return &TestStructPointerMisuseCustom{ReturnCh: returnCh}
 	})
 	m.Run()
-	s, _ := m.GetSourceByName("queue-1")
+	s, _ := m.GetQueueByName("queue-1")
 
 	// Expected ID
 	expectedID1 := "foo"
@@ -308,11 +308,11 @@ func TestStructPointerMisuseDoneCustomJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process {
 		return &TestStructPointerMisuseDoneCustom{ReturnCh: returnCh}
 	})
 	m.Run()
-	s, _ := m.GetSourceByName("queue-1")
+	s, _ := m.GetQueueByName("queue-1")
 
 	// Expected ID
 	expectedID1 := "foo"
@@ -347,8 +347,8 @@ func TestPanicRunJob(t *testing.T) {
 	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
 	m.Run()
-	s, _ := m.GetSourceByName("queue-1")
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+	s, _ := m.GetQueueByName("queue-1")
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process {
 		return &TestPanicRun{}
 	})
 
@@ -382,8 +382,8 @@ func TestPanicDoneJob(t *testing.T) {
 	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
 	m.Run()
-	s, _ := m.GetSourceByName("queue-1")
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+	s, _ := m.GetQueueByName("queue-1")
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process {
 		return &TestPanicDone{}
 	})
 
@@ -418,8 +418,8 @@ func TestPanicCustomJob(t *testing.T) {
 	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
 	m.Run()
-	s, _ := m.GetSourceByName("queue-1")
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+	s, _ := m.GetQueueByName("queue-1")
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process {
 		return &TestPanicCustom{}
 	})
 
@@ -447,11 +447,11 @@ func TestGoChannel50kJobs(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.SetNotifyChan(doneCh)
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process {
 		return &TestBasic{}
 	})
 	m.Run()
-	s, err := m.GetSourceByName("queue-1")
+	s, err := m.GetQueueByName("queue-1")
 	if err != nil {
 		t.Log(err)
 		return
@@ -500,11 +500,11 @@ func TestSqs500Jobs(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(sqsConfig)
 	m.SetNotifyChan(doneCh)
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Contract {
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process {
 		return &TestBasic{}
 	})
 	m.Run()
-	s, err := m.GetSourceByName("queue-1")
+	s, err := m.GetQueueByName("queue-1")
 	assert.NotNil(t, s)
 	if !assert.NoError(t, err) {
 		return

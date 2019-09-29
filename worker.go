@@ -3,13 +3,13 @@ package worker
 import (
 	"log"
 	"sync"
-	"worker/source"
+	"worker/queue"
 )
 
 type worker struct {
-	config       *source.Config
-	source       source.Sourcer
-	jobTypes     map[string]sign
+	config       *queue.Config
+	queue        queue.Queuer
+	jobTypes     map[string]process
 	receivedChan chan *Job
 	doneChan     chan *Job
 	status       map[int64]*Job
@@ -19,11 +19,11 @@ type worker struct {
 	// log *io.Writer
 }
 
-func newWorker(c *source.Config) *worker {
+func newWorker(c *queue.Config) *worker {
 	return &worker{
 		config:       c,
 		receivedChan: make(chan *Job),
-		jobTypes:     make(map[string]sign),
+		jobTypes:     make(map[string]process),
 		status:       make(map[int64]*Job, c.WorkerConcurrency),
 	}
 }

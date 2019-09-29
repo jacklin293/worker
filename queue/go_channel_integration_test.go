@@ -1,6 +1,6 @@
 // +build integration
 
-package source
+package queue
 
 import (
 	"testing"

@@ -1,4 +1,4 @@
-package source
+package queue
 
 import (
 	"errors"
@@ -6,6 +6,10 @@ import (
 	"net/url"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
@@ -49,8 +53,9 @@ func (c *sqsConfig) validate() error {
 	return nil
 }
 
-func (c *sqsConfig) New() (s Sourcer, err error) {
+func (c *sqsConfig) New() (Queuer, error) {
 	var endpoint string
+	var err error
 	if c.UseLocalSqs {
 		// Remove the last slash
 		endpoint, err = c.getEndpoint()
@@ -78,12 +83,12 @@ func (c *sqsConfig) New() (s Sourcer, err error) {
 		recInput.SetWaitTimeSeconds(c.WaitTimeSeconds)
 	}
 
-	s = &SQS{
+	q := &SQS{
 		service:             sqs.New(session),
 		config:              c,
 		receiveMessageInput: recInput,
 	}
-	return
+	return q, err
 }
 
 func (c *sqsConfig) getEndpoint() (endpoint string, err error) {
@@ -142,4 +147,30 @@ func (s *SQS) Delete(receipts []string) (*sqs.DeleteMessageBatchOutput, error) {
 		QueueUrl: aws.String(s.config.QueueUrl),
 	}
 	return s.service.DeleteMessageBatch(param)
+}
+
+func newAwsSession(region string, filename string, profile string, endpoint string) (*session.Session, error) {
+	s, err := session.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	config := aws.NewConfig()
+	var ProviderList []credentials.Provider = []credentials.Provider{
+		&credentials.EnvProvider{},
+		&ec2rolecreds.EC2RoleProvider{
+			Client: ec2metadata.New(s, config),
+		},
+		&credentials.SharedCredentialsProvider{
+			Filename: filename,
+			Profile:  profile,
+		},
+	}
+	cred := credentials.NewChainCredentials(ProviderList)
+	config.WithCredentials(cred)
+	config.WithRegion(region)
+
+	if endpoint != "" {
+		config.WithEndpoint(endpoint)
+	}
+	return session.NewSession(config)
 }

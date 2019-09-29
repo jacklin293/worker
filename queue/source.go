@@ -1,6 +1,6 @@
-package source
+package queue
 
-type Sourcer interface {
+type Queuer interface {
 	Send(interface{}) (interface{}, error)
 	Receive() (interface{}, error)
 }

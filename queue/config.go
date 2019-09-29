@@ -1,4 +1,4 @@
-package source
+package queue
 
 import (
 	"errors"
@@ -7,14 +7,14 @@ import (
 
 type Configure interface {
 	validate() error
-	New() (Sourcer, error)
+	New() (Queuer, error)
 }
 
 type Config struct {
 	// Required
 	Name              string `json:"name"`
-	SourceType        string `json:"source_type"`
-	SourceConcurrency int64  `json:"source_concurrency"`
+	QueueType         string `json:"queue_type"`
+	QueueConcurrency  int64  `json:"queue_concurrency"`
 	WorkerConcurrency int64  `json:"worker_concurrency"`
 	Enabled           bool   `json:"enabled"`
 
@@ -27,25 +27,25 @@ func (c *Config) Validate() (err error) {
 	if c.Name == "" {
 		return errors.New("name cannot be empty")
 	}
-	if c.SourceConcurrency == 0 {
-		return fmt.Errorf("source_concurrency cannot be 0")
+	if c.QueueConcurrency == 0 {
+		return fmt.Errorf("queue_concurrency cannot be 0")
 	}
 	if c.WorkerConcurrency == 0 {
 		return fmt.Errorf("worker_concurrency cannot be 0")
 	}
 
-	// Validate source_type
-	switch c.SourceType {
+	// Validate queue_type
+	switch c.QueueType {
 	case "sqs", "go_channel":
 	default:
-		err = fmt.Errorf("source_type '%s' not supported", c.SourceType)
+		err = fmt.Errorf("queue_type '%s' not supported", c.QueueType)
 	}
 	return
 }
 
 // Convert config into Configure
-func (c *Config) GetSourceAttr() Configure {
-	switch c.SourceType {
+func (c *Config) GetQueueAttr() Configure {
+	switch c.QueueType {
 	case "sqs":
 		return &c.sqsConfig
 	case "go_channel":
