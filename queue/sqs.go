@@ -121,13 +121,13 @@ func (s *SQS) Receive() (interface{}, error) {
 	if err != nil {
 		return nil, errors.New("Failed to receive messages from SQS. " + err.Error())
 	}
-	messages := make([][]byte, len(resp.Messages))
-	receipts := make([]string, len(resp.Messages))
-	for i, msg := range resp.Messages {
-		messages[i] = []byte(*msg.Body)
-		receipts[i] = *msg.ReceiptHandle
+	messages := make([][]byte, 0, len(resp.Messages))
+	receipts := make([]string, 0, len(resp.Messages))
+	for _, msg := range resp.Messages {
+		messages = append(messages, []byte(*msg.Body))
+		receipts = append(receipts, *msg.ReceiptHandle)
 	}
-	if len(resp.Messages) > 0 {
+	if len(receipts) > 0 {
 		_, err = s.Delete(receipts)
 	}
 	return messages, err

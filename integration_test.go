@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -44,41 +43,46 @@ var sqsConfig = `[
 	}
 ]`
 
-func getMessage(id string) []byte {
-	return []byte(fmt.Sprintf(`{"job_id":"test-job-id-%s","job_type":"test-job-type-1","payload":"{\"id\":\"%s\",\"timestamp\":%d}"}`, id, id, time.Now().UnixNano()))
+type JobBodyType string
+
+const (
+	bodyTypeString JobBodyType = "string"
+	bodyTypeMap    JobBodyType = "map"
+)
+
+func getMessage(t JobBodyType, id string) []byte {
+	switch t {
+	case bodyTypeString:
+		return []byte(fmt.Sprintf(`{"job_id":"test-job-id-%s","job_type":"test-job-type-1","payload":"%s"}`, id, id))
+	case bodyTypeMap:
+		return []byte(fmt.Sprintf(`{"job_id":"test-job-id-%s","job_type":"test-job-type-1","payload":"{\"id\":\"%s\",\"timestamp\":%d}"}`, id, id, time.Now().UnixNano()))
+	}
+	return []byte{}
 }
 
 // ------------------------------------------------------------------
 
 // Test basic function
-type TestBasic struct{}
+type TestBasic struct{ ReturnCh chan string }
 
 func (tj *TestBasic) Run(j *Job) error       { return nil }
-func (tj *TestBasic) Done(j *Job, err error) {}
+func (tj *TestBasic) Done(j *Job, err error) { tj.ReturnCh <- j.Desc.Payload.(string) }
 
 func TestBasicJob(t *testing.T) {
-	doneCh := make(chan *Job)
+	returnCh := make(chan string)
 
-	// New handler
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
-	m.SetNotifyChan(doneCh)
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestBasic{} })
-	m.Run()
-	s, _ := m.GetQueueByName("queue-1")
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestBasic{ReturnCh: returnCh} })
+	s, err := m.GetQueueByName("queue-1")
+	if err != nil {
+		t.Log(err)
+		return
+	}
+	go m.Run()
 
-	// Prepare the message and expected job struct
-	msg := getMessage("foo")
-	expected := Job{}
-	json.Unmarshal(msg, &expected.Desc)
-
-	// Send the message
-	s.Send(msg)
-	time.Sleep(1 * time.Millisecond)
-
-	// Returned job (converted from message)
-	result := <-doneCh
-	assert.Equal(t, expected.Desc.Payload, result.Desc.Payload)
+	s.Send(getMessage(bodyTypeString, "foo"))
+	assert.Equal(t, "foo", <-returnCh)
 }
 
 // ------------------------------------------------------------------
@@ -96,22 +100,16 @@ func (t *TestDone) Run(j *Job) error {
 func (t *TestDone) Done(j *Job, err error) { t.ReturnCh <- t.ID }
 
 func TestDoneJob(t *testing.T) {
-	doneCh := make(chan *Job)
 	returnCh := make(chan string)
 
-	// New handler
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
-	m.SetNotifyChan(doneCh)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestDone{ReturnCh: returnCh} })
-	m.Run()
 	s, _ := m.GetQueueByName("queue-1")
+	go m.Run()
 
-	// Send the message
-	s.Send(getMessage("foo"))
-	time.Sleep(1 * time.Millisecond)
+	s.Send(getMessage(bodyTypeString, "foo"))
 	assert.Equal(t, "foo", <-returnCh)
-	<-doneCh
 }
 
 // ------------------------------------------------------------------
@@ -121,26 +119,20 @@ type TestErr struct {
 	ReturnCh chan string
 }
 
-func (t *TestErr) Run(j *Job) error       { return errors.New("bar") }
+func (t *TestErr) Run(j *Job) error       { return errors.New("error") }
 func (t *TestErr) Done(j *Job, err error) { t.ReturnCh <- err.Error() }
 
 func TestErrJob(t *testing.T) {
-	doneCh := make(chan *Job)
 	returnCh := make(chan string)
 
-	// New handler
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
-	m.SetNotifyChan(doneCh)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestErr{ReturnCh: returnCh} })
-	m.Run()
 	s, _ := m.GetQueueByName("queue-1")
+	go m.Run()
 
-	// Send the message
-	s.Send(getMessage("foo"))
-	time.Sleep(1 * time.Millisecond)
-	assert.Equal(t, "bar", <-returnCh)
-	<-doneCh
+	s.Send(getMessage(bodyTypeString, "foo"))
+	assert.Equal(t, "error", <-returnCh)
 }
 
 // ------------------------------------------------------------------
@@ -160,29 +152,21 @@ func (tj *TestStructPointerMisuseRun) Run(j *Job) error {
 func (tj *TestStructPointerMisuseRun) Done(j *Job, err error) {}
 
 func TestStructPointerMisuseRunJob(t *testing.T) {
-	doneCh := make(chan *Job)
 	returnCh := make(chan string)
 
-	// New handler
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
-	m.SetNotifyChan(doneCh)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestStructPointerMisuseRun{ReturnCh: returnCh} })
-	m.Run()
 	s, _ := m.GetQueueByName("queue-1")
+	go m.Run()
 
-	// Expected ID
 	expectedID1 := "foo"
 	expectedID2 := "bar"
-
-	// Send the messages separately with 150ms delay
-	s.Send(getMessage(expectedID1))
+	s.Send(getMessage(bodyTypeMap, expectedID1))
 	time.Sleep(150 * time.Millisecond)
-	s.Send(getMessage(expectedID2))
+	s.Send(getMessage(bodyTypeMap, expectedID2))
 	assert.Equal(t, expectedID1, <-returnCh)
 	assert.Equal(t, expectedID2, <-returnCh)
-	<-doneCh
-	<-doneCh
 }
 
 // ------------------------------------------------------------------
@@ -201,29 +185,21 @@ func (tj *TestStructPointerMisuseDone) Run(j *Job) error {
 func (tj *TestStructPointerMisuseDone) Done(j *Job, err error) { tj.ReturnCh <- tj.ID }
 
 func TestStructPointerMisuseDoneJob(t *testing.T) {
-	doneCh := make(chan *Job)
 	returnCh := make(chan string)
 
-	// New handler
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
-	m.SetNotifyChan(doneCh)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestStructPointerMisuseDone{ReturnCh: returnCh} })
-	m.Run()
 	s, _ := m.GetQueueByName("queue-1")
+	go m.Run()
 
-	// Expected ID
 	expectedID1 := "foo"
 	expectedID2 := "bar"
-
-	// Send the messages separately with 150ms delay
-	s.Send(getMessage(expectedID1))
+	s.Send(getMessage(bodyTypeMap, expectedID1))
 	time.Sleep(150 * time.Millisecond)
-	s.Send(getMessage(expectedID2))
+	s.Send(getMessage(bodyTypeMap, expectedID2))
 	assert.Equal(t, expectedID1, <-returnCh)
 	assert.Equal(t, expectedID2, <-returnCh)
-	<-doneCh
-	<-doneCh
 }
 
 // ------------------------------------------------------------------
@@ -244,34 +220,26 @@ func (tj *TestStructPointerMisuseCustom) Done(j *Job, err error) {}
 func (tj *TestStructPointerMisuseCustom) Custom()                { tj.ReturnCh <- tj.ID }
 
 func TestStructPointerMisuseCustomJob(t *testing.T) {
-	doneCh := make(chan *Job)
 	returnCh := make(chan string)
 
-	// New handler
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
-	m.SetNotifyChan(doneCh)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestStructPointerMisuseCustom{ReturnCh: returnCh} })
-	m.Run()
 	s, _ := m.GetQueueByName("queue-1")
+	go m.Run()
 
-	// Expected ID
 	expectedID1 := "foo"
 	expectedID2 := "bar"
-
-	// Send the messages separately with 150ms delay
-	s.Send(getMessage(expectedID1))
+	s.Send(getMessage(bodyTypeMap, expectedID1))
 	time.Sleep(150 * time.Millisecond)
-	s.Send(getMessage(expectedID2))
+	s.Send(getMessage(bodyTypeMap, expectedID2))
 	assert.Equal(t, expectedID1, <-returnCh)
 	assert.Equal(t, expectedID2, <-returnCh)
-	<-doneCh
-	<-doneCh
 }
 
 // ------------------------------------------------------------------
 
-// Test pointer misuse (custom)
+// Test pointer misuse (done->custom)
 type TestStructPointerMisuseDoneCustom struct {
 	ID       string `json:"id"`
 	ReturnCh chan string
@@ -289,29 +257,21 @@ func (tj *TestStructPointerMisuseDoneCustom) Done(j *Job, err error) {
 func (tj *TestStructPointerMisuseDoneCustom) Custom() { tj.ReturnCh <- tj.ID }
 
 func TestStructPointerMisuseDoneCustomJob(t *testing.T) {
-	doneCh := make(chan *Job)
 	returnCh := make(chan string)
 
-	// New handler
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
-	m.SetNotifyChan(doneCh)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestStructPointerMisuseDoneCustom{ReturnCh: returnCh} })
-	m.Run()
 	s, _ := m.GetQueueByName("queue-1")
+	go m.Run()
 
-	// Expected ID
 	expectedID1 := "foo"
 	expectedID2 := "bar"
-
-	// Send the messages separately with 150ms delay
-	s.Send(getMessage(expectedID1))
+	s.Send(getMessage(bodyTypeMap, expectedID1))
 	time.Sleep(150 * time.Millisecond)
-	s.Send(getMessage(expectedID2))
+	s.Send(getMessage(bodyTypeMap, expectedID2))
 	assert.Equal(t, expectedID1+"/done", <-returnCh)
 	assert.Equal(t, expectedID2+"/done", <-returnCh)
-	<-doneCh
-	<-doneCh
 }
 
 // ------------------------------------------------------------------
@@ -326,28 +286,15 @@ func (tj *TestPanicRun) Run(j *Job) error {
 func (tj *TestPanicRun) Done(j *Job, err error) {}
 
 func TestPanicRunJob(t *testing.T) {
-	doneCh := make(chan *Job)
-
-	// New handler
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
-	m.SetNotifyChan(doneCh)
-	m.Run()
-	s, _ := m.GetQueueByName("queue-1")
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestPanicRun{} })
+	s, _ := m.GetQueueByName("queue-1")
+	go m.Run()
 
-	// Prepare the message and expected job struct
-	msg := getMessage("foo")
-	expected := Job{}
-	json.Unmarshal(msg, &expected.Desc)
-
-	// Send the message
-	s.Send(msg)
-	time.Sleep(1 * time.Millisecond)
-
-	// Returned job (converted from message)
-	result := <-doneCh
-	assert.Equal(t, expected.Desc.Payload, result.Desc.Payload)
+	s.Send(getMessage(bodyTypeString, "foo"))
+	time.Sleep(10 * time.Millisecond) // Let worker process the job
+	assert.Equal(t, int64(1), m.JobCounter())
 }
 
 // ------------------------------------------------------------------
@@ -359,33 +306,20 @@ func (tj *TestPanicDone) Run(j *Job) error       { return nil }
 func (tj *TestPanicDone) Done(j *Job, err error) { panic("panic in Done") }
 
 func TestPanicDoneJob(t *testing.T) {
-	doneCh := make(chan *Job)
-
-	// New handler
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
-	m.SetNotifyChan(doneCh)
-	m.Run()
-	s, _ := m.GetQueueByName("queue-1")
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestPanicDone{} })
+	s, _ := m.GetQueueByName("queue-1")
+	go m.Run()
 
-	// Prepare the message and expected job struct
-	msg := getMessage("foo")
-	expected := Job{}
-	json.Unmarshal(msg, &expected.Desc)
-
-	// Send the message
-	s.Send(msg)
-	time.Sleep(1 * time.Millisecond)
-
-	// Returned job (converted from message)
-	result := <-doneCh
-	assert.Equal(t, expected.Desc.Payload, result.Desc.Payload)
+	s.Send(getMessage(bodyTypeString, "foo"))
+	time.Sleep(10 * time.Millisecond)
+	assert.Equal(t, int64(1), m.JobCounter())
 }
 
 // ------------------------------------------------------------------
 
-// Test panic in Done
+// Test panic in Custom func
 type TestPanicCustom struct{}
 
 func (tj *TestPanicCustom) Run(j *Job) error       { return nil }
@@ -393,130 +327,80 @@ func (tj *TestPanicCustom) Done(j *Job, err error) { tj.Custom() }
 func (tj *TestPanicCustom) Custom()                { panic("panic in Custom") }
 
 func TestPanicCustomJob(t *testing.T) {
-	doneCh := make(chan *Job)
-
-	// New handler
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
-	m.SetNotifyChan(doneCh)
-	m.Run()
-	s, _ := m.GetQueueByName("queue-1")
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestPanicCustom{} })
+	s, _ := m.GetQueueByName("queue-1")
+	go m.Run()
 
-	// Prepare the message and expected job struct
-	msg := getMessage("foo")
-	expected := Job{}
-	json.Unmarshal(msg, &expected.Desc)
-
-	// Send the message
-	s.Send(msg)
-	time.Sleep(1 * time.Millisecond)
-
-	// Returned job (converted from message)
-	result := <-doneCh
-	assert.Equal(t, expected.Desc.Payload, result.Desc.Payload)
+	s.Send(getMessage(bodyTypeString, "foo"))
+	time.Sleep(10 * time.Millisecond)
+	assert.Equal(t, int64(1), m.JobCounter())
 }
 
 // ------------------------------------------------------------------
 
+// Test go_channel
+type TestGoChannel struct{}
+
+func (tj *TestGoChannel) Run(j *Job) error       { return nil }
+func (tj *TestGoChannel) Done(j *Job, err error) {}
+
 // Test GoChannel 50k jobs
 func TestGoChannel50kJobs(t *testing.T) {
-	doneCh := make(chan *Job)
-
-	// New handler
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
-	m.SetNotifyChan(doneCh)
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestBasic{} })
-	m.Run()
-	s, err := m.GetQueueByName("queue-1")
-	if err != nil {
-		t.Log(err)
-		return
-	}
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestGoChannel{} })
+	s, _ := m.GetQueueByName("queue-1")
+	go m.Run()
 
-	// Send
-	var wg sync.WaitGroup
-	counter := 0
-	total := 50000
-	go func(wg *sync.WaitGroup, total int) {
-		for i := 0; i < total; i++ {
-			wg.Add(1)
-			go func(i int) {
-				s.Send(getMessage(strconv.Itoa(i)))
+	total := int64(50000)
+	go func(total int64) {
+		for i := int64(0); i < total; i++ {
+			go func(i int64) {
+				s.Send(getMessage(bodyTypeString, strconv.FormatInt(i, 10)))
 			}(i)
 		}
-	}(&wg, total)
+	}(total)
 
-	// Let wg.Add works before it ends
-	time.Sleep(1 * time.Millisecond)
-
-	// Receive
-	go func(wg *sync.WaitGroup, counter *int) {
-		for i := 0; i < total; i++ {
-			select {
-			case <-doneCh:
-				*counter++
-				wg.Done()
-			}
-		}
-	}(&wg, &counter)
-	wg.Wait()
-
+	var counter int64
+	for counter < total {
+		time.Sleep(10 * time.Millisecond)
+		counter = m.JobCounter()
+	}
 	assert.Equal(t, total, counter)
 	t.Logf("counter/total: %d/%d\n", counter, total)
 }
 
 // ------------------------------------------------------------------
 
-// Test SQS 100 jobs
-func TestSqs100Jobs(t *testing.T) {
-	doneCh := make(chan *Job)
+// Test SQS
+type TestSQS struct{}
 
-	// New handler
+func (tj *TestSQS) Run(j *Job) error       { return nil }
+func (tj *TestSQS) Done(j *Job, err error) {}
+
+func TestSqs100Jobs(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(sqsConfig)
-	m.SetNotifyChan(doneCh)
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestBasic{} })
-	m.Run()
-	s, err := m.GetQueueByName("queue-1")
-	assert.NotNil(t, s)
-	if !assert.NoError(t, err) {
-		return
-	}
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestSQS{} })
+	s, _ := m.GetQueueByName("queue-1")
+	go m.Run()
 
-	// Send
-	var wg sync.WaitGroup
-	counter := 0
-	total := 100
-	go func(wg *sync.WaitGroup, total int) {
-		for i := 0; i < total; i++ {
-			wg.Add(1)
-			go func(i int) {
-				_, err := s.Send([][]byte{getMessage(strconv.Itoa(i))})
-				if !assert.NoError(t, err) {
-					t.Log(err)
-					return
-				}
+	total := int64(100)
+	go func(total int64) {
+		for i := int64(0); i < total; i++ {
+			go func(i int64) {
+				s.Send([][]byte{getMessage(bodyTypeString, strconv.FormatInt(i, 10))})
 			}(i)
 		}
-	}(&wg, total)
+	}(total)
 
-	// Let wg.Add works before it ends
-	time.Sleep(1 * time.Millisecond)
-
-	// Receive
-	go func(wg *sync.WaitGroup, counter *int) {
-		for i := 0; i < total; i++ {
-			select {
-			case <-doneCh:
-				*counter++
-				wg.Done()
-			}
-		}
-	}(&wg, &counter)
-	wg.Wait()
-
+	var counter int64
+	for counter < total {
+		time.Sleep(10 * time.Millisecond)
+		counter = m.JobCounter()
+	}
 	assert.Equal(t, total, counter)
 	t.Logf("counter/total: %d/%d\n", counter, total)
 }

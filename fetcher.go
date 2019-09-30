@@ -7,15 +7,25 @@ import (
 )
 
 type fetcher struct {
-	worker *worker
+	worker        *worker
+	signalHandler *signalHandler
+	stopQueueCh   chan bool
 }
 
 func newFetcher() *fetcher {
-	return &fetcher{}
+	return &fetcher{stopQueueCh: make(chan bool)}
 }
 
 func (f *fetcher) receive() {
 	for {
+		// Graceful shutdown
+		select {
+		case <-f.stopQueueCh:
+			log.Println("Stop receiving message and start waiting for the rest of jobs to be done")
+			return
+		default:
+		}
+
 		message, err := f.worker.queue.Receive()
 		if err != nil {
 			log.Println("Error: ", err)
@@ -61,6 +71,7 @@ func (f *fetcher) processMessage(msg []byte, j *Job) (err error) {
 		return
 	}
 	j.receivedAt = time.Now()
+	f.signalHandler.wg.Add(1)
 	f.worker.receivedChan <- j
 	return
 }

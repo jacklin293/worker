@@ -15,9 +15,8 @@ type Handler struct {
 
 	doneChan chan *Job
 
-	// When job is done, notify someone whom is interested in.
-	// New() won't register it, leave it nil to disable as default
-	notifyChan chan *Job
+	signalHandler *signalHandler
+	jobCounter    int64
 
 	// TODO
 	// log *io.Writer
@@ -28,6 +27,8 @@ func New() *Handler { // FIXME func should be named as Project name
 	h.fetchers = make(map[string][]*fetcher)
 	h.workers = make(map[string]*worker)
 	h.doneChan = make(chan *Job)
+	h.signalHandler = newSignalHandler()
+	h.signalHandler.stopCall = h.stopCall
 	return &h
 }
 
@@ -81,6 +82,19 @@ func (h *Handler) Run() {
 		h.runFetchers(c)
 	}
 	go h.done()
+	h.signalHandler.capture()
+}
+
+func (h *Handler) Shutdown() {
+	close(h.signalHandler.shutdownCh)
+}
+
+func (h *Handler) stopCall() {
+	for _, fetchers := range h.fetchers {
+		for _, f := range fetchers {
+			close(f.stopQueueCh)
+		}
+	}
 }
 
 // Process messages
@@ -102,6 +116,7 @@ func (h *Handler) runFetchers(c *queue.Config) {
 	for i := int64(0); i < c.QueueConcurrency; i++ {
 		f := newFetcher()
 		f.worker = w
+		f.signalHandler = h.signalHandler
 		h.fetchers[c.Name] = append(h.fetchers[c.Name], f)
 		go f.receive()
 	}
@@ -109,13 +124,9 @@ func (h *Handler) runFetchers(c *queue.Config) {
 
 func (h *Handler) done() {
 	for {
-		j := <-h.doneChan
-		if h.notifyChan != nil {
-			go func(h *Handler, j *Job) {
-				h.notifyChan <- j
-			}(h, j)
-		}
-		// TODO Graceful shutdown
+		<-h.doneChan
+		h.signalHandler.wg.Done()
+		h.jobCounter++
 	}
 }
 
@@ -164,8 +175,8 @@ func (h *Handler) GetJobTypeList() map[string][]string {
 	return mm
 }
 
-func (h *Handler) SetNotifyChan(ch chan *Job) {
-	h.notifyChan = ch
+func (h *Handler) JobCounter() int64 {
+	return h.jobCounter
 }
 
 // Queue name
