@@ -1,8 +1,8 @@
 package queue
 
 import (
-	"errors"
 	"fmt"
+	"regexp"
 )
 
 type Configure interface {
@@ -23,9 +23,8 @@ type Config struct {
 }
 
 func (c *Config) Validate() (err error) {
-	// TODO only contain a-z, A-Z, -, _   unique name
-	if c.Name == "" {
-		return errors.New("name cannot be empty")
+	if !regexp.MustCompile(`^[\w-]+$`).MatchString(c.Name) {
+		return fmt.Errorf("name '%s' can only contain letter, number, underscore and hyphen", c.Name)
 	}
 	if c.QueueConcurrency == 0 {
 		return fmt.Errorf("queue_concurrency cannot be 0")
@@ -37,6 +36,7 @@ func (c *Config) Validate() (err error) {
 	// Validate queue_type
 	switch c.QueueType {
 	case "sqs", "go_channel":
+		return
 	default:
 		err = fmt.Errorf("queue_type '%s' not supported", c.QueueType)
 	}

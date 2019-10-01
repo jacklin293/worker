@@ -17,7 +17,7 @@ const (
 	defaultWaitTimeSeconds = 20
 )
 
-// Implementation
+// Config
 type sqsConfig struct {
 	// e.g. https://sqs.us-east-1.amazonaws.com/4**********7/queue_name
 	QueueUrl string `json:"queue_url"`
@@ -33,7 +33,6 @@ type sqsConfig struct {
 	WaitTimeSeconds     int64 `json:"wait_time_seconds"`
 }
 
-// Config
 type SQS struct {
 	service             *sqs.SQS
 	config              *sqsConfig

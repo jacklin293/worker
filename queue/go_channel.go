@@ -7,7 +7,6 @@ type goChannelConfig struct {
 	Size int64 `json:"size"`
 }
 
-// Implementation
 type GoChannel struct {
 	ch     chan []byte
 	config *goChannelConfig
