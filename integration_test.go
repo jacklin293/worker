@@ -74,7 +74,7 @@ func TestBasicJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestBasic{ReturnCh: returnCh} })
-	s, err := m.GetQueueByName("queue-1")
+	s, err := m.Queue("queue-1")
 	if err != nil {
 		t.Log(err)
 		return
@@ -105,7 +105,7 @@ func TestDoneJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestDone{ReturnCh: returnCh} })
-	s, _ := m.GetQueueByName("queue-1")
+	s, _ := m.Queue("queue-1")
 	go m.Run()
 
 	s.Send(getMessage(bodyTypeString, "foo"))
@@ -128,7 +128,7 @@ func TestErrJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestErr{ReturnCh: returnCh} })
-	s, _ := m.GetQueueByName("queue-1")
+	s, _ := m.Queue("queue-1")
 	go m.Run()
 
 	s.Send(getMessage(bodyTypeString, "foo"))
@@ -157,7 +157,7 @@ func TestPointerStructRunJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestPointerStructRun{ReturnCh: returnCh} })
-	s, _ := m.GetQueueByName("queue-1")
+	s, _ := m.Queue("queue-1")
 	go m.Run()
 
 	expectedID1 := "foo"
@@ -190,7 +190,7 @@ func TestPointerStructDoneJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestPointerStructDone{ReturnCh: returnCh} })
-	s, _ := m.GetQueueByName("queue-1")
+	s, _ := m.Queue("queue-1")
 	go m.Run()
 
 	expectedID1 := "foo"
@@ -225,7 +225,7 @@ func TestPointerStructCustomJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestPointerStructCustom{ReturnCh: returnCh} })
-	s, _ := m.GetQueueByName("queue-1")
+	s, _ := m.Queue("queue-1")
 	go m.Run()
 
 	expectedID1 := "foo"
@@ -262,7 +262,7 @@ func TestPointerStructDoneCustomJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestPointerStructDoneCustom{ReturnCh: returnCh} })
-	s, _ := m.GetQueueByName("queue-1")
+	s, _ := m.Queue("queue-1")
 	go m.Run()
 
 	expectedID1 := "foo"
@@ -289,7 +289,7 @@ func TestPanicRunJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestPanicRun{} })
-	s, _ := m.GetQueueByName("queue-1")
+	s, _ := m.Queue("queue-1")
 	go m.Run()
 
 	s.Send(getMessage(bodyTypeString, "foo"))
@@ -309,7 +309,7 @@ func TestPanicDoneJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestPanicDone{} })
-	s, _ := m.GetQueueByName("queue-1")
+	s, _ := m.Queue("queue-1")
 	go m.Run()
 
 	s.Send(getMessage(bodyTypeString, "foo"))
@@ -330,7 +330,7 @@ func TestPanicCustomJob(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestPanicCustom{} })
-	s, _ := m.GetQueueByName("queue-1")
+	s, _ := m.Queue("queue-1")
 	go m.Run()
 
 	s.Send(getMessage(bodyTypeString, "foo"))
@@ -350,7 +350,7 @@ func TestGoChannel100Jobs(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestGoChannel{} })
-	s, _ := m.GetQueueByName("queue-1")
+	s, _ := m.Queue("queue-1")
 	go m.Run()
 
 	total := int64(100)
@@ -383,7 +383,7 @@ func TestSqs100Jobs(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(sqsConfig)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestSQS{} })
-	s, _ := m.GetQueueByName("queue-1")
+	s, _ := m.Queue("queue-1")
 	go m.Run()
 
 	total := int64(100)
@@ -416,7 +416,7 @@ func TestTestGracefulShutdown(t *testing.T) {
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
 	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestGracefulShutdown{} })
-	s, _ := m.GetQueueByName("queue-1")
+	s, _ := m.Queue("queue-1")
 	go m.Run()
 
 	total := int64(50000)

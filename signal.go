@@ -10,9 +10,9 @@ import (
 
 // Gracefull shutdown
 type signalHandler struct {
-	sigs       chan os.Signal
-	shutdownCh chan bool
-	stopCall   func()
+	sigs        chan os.Signal
+	shutdownCh  chan bool
+	beforeClose func()
 
 	wg sync.WaitGroup
 	// TODO io.Writer
@@ -30,11 +30,15 @@ func (s *signalHandler) capture() {
 	signal.Notify(s.sigs, syscall.SIGINT, syscall.SIGTERM) // SIGINT=2, SIGTERM=15
 	select {
 	case <-s.shutdownCh:
+		s.close()
 	case <-s.sigs:
-		log.Println("Terminating ...")
-		s.stopCall()
-		s.wg.Wait()
-		log.Println("Terminated")
-		os.Exit(0)
+		s.close()
 	}
+}
+
+func (s *signalHandler) close() {
+	log.Printf("Terminating ... (pid: %d)\n", syscall.Getpid())
+	s.beforeClose()
+	s.wg.Wait()
+	log.Printf("Terminated (pid: %d)\n", syscall.Getpid())
 }

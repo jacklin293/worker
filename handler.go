@@ -28,7 +28,7 @@ func New() *Handler { // FIXME func should be named as Project name
 	h.workers = make(map[string]*worker)
 	h.doneChan = make(chan *Job)
 	h.signalHandler = newSignalHandler()
-	h.signalHandler.stopCall = h.stopCall
+	h.signalHandler.beforeClose = h.beforeClose
 	return &h
 }
 
@@ -89,9 +89,10 @@ func (h *Handler) Shutdown() {
 	close(h.signalHandler.shutdownCh)
 }
 
-func (h *Handler) stopCall() {
-	for _, fetchers := range h.fetchers {
-		for _, f := range fetchers {
+func (h *Handler) beforeClose() {
+	for qName, fetchers := range h.fetchers {
+		for i, f := range fetchers {
+			log.Printf("close fetcher['%s'][%d]\n", qName, i)
 			close(f.stopQueueCh)
 		}
 	}
@@ -112,10 +113,9 @@ func (h *Handler) runWorkers(c *queue.Config) {
 
 // Receive messages
 func (h *Handler) runFetchers(c *queue.Config) {
-	w := h.workers[c.Name]
 	for i := int64(0); i < c.QueueConcurrency; i++ {
 		f := newFetcher()
-		f.worker = w
+		f.worker = h.workers[c.Name]
 		f.signalHandler = h.signalHandler
 		h.fetchers[c.Name] = append(h.fetchers[c.Name], f)
 		go f.receive()
@@ -142,15 +142,15 @@ func (h *Handler) RegisterJobType(name string, jobType string, p process) {
 	h.workers[name].jobTypes[jobType] = p
 }
 
-func (h *Handler) GetFetcherNum() map[string]int {
+func (h *Handler) FetcherNum() map[string]int {
 	mm := make(map[string]int)
-	for n, fetchers := range h.fetchers {
-		mm[n] = len(fetchers)
+	for qName, fetchers := range h.fetchers {
+		mm[qName] = len(fetchers)
 	}
 	return mm
 }
 
-func (h *Handler) GetWorkerStatus() map[string][]Job {
+func (h *Handler) WorkerStatus() map[string][]Job {
 	mm := make(map[string][]Job)
 	for name, w := range h.workers {
 		mm[name] = make([]Job, w.config.WorkerConcurrency)
@@ -165,7 +165,7 @@ func (h *Handler) GetWorkerStatus() map[string][]Job {
 	return mm
 }
 
-func (h *Handler) GetJobTypeList() map[string][]string {
+func (h *Handler) JobTypeList() map[string][]string {
 	mm := make(map[string][]string)
 	for n, w := range h.workers {
 		for typ := range w.jobTypes {
@@ -180,7 +180,7 @@ func (h *Handler) JobCounter() int64 {
 }
 
 // Queue name
-func (h *Handler) GetQueueByName(name string) (queue.Queuer, error) {
+func (h *Handler) Queue(name string) (queue.Queuer, error) {
 	if _, ok := h.workers[name]; ok {
 		return h.workers[name].queue, nil
 	}

@@ -4,9 +4,7 @@ package worker
 
 import (
 	"fmt"
-	"strconv"
 	"testing"
-	"time"
 )
 
 var goChannelConfig = `[
@@ -23,37 +21,34 @@ var goChannelConfig = `[
 ]`
 
 type TestBasic struct {
-	ID  string `json:"id"`
-	Now int64
+	ID       string `json:"id"`
+	Now      int64
+	ReturnCh chan string
 }
 
 // Test Race condition
 func (tj *TestBasic) Run(j *Job) error       { return nil }
-func (tj *TestBasic) Done(j *Job, err error) {}
+func (tj *TestBasic) Done(j *Job, err error) { tj.ReturnCh <- j.Desc.Payload.(string) }
 
 func BenchmarkLoops(b *testing.B) {
+	returnCh := make(chan string)
+
 	m := New()
 	m.InitWithJsonConfig(goChannelConfig)
-	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestBasic{} })
-	source, _ := m.GetQueueByName("queue-1")
+	m.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &TestBasic{ReturnCh: returnCh} })
+	source, _ := m.Queue("queue-1")
 	go m.Run()
-
-	num := 1000
-	counter := num
-	for i := 0; i < b.N; i++ {
+	for i := 0; i <= b.N; i++ {
 		go func() {
-			for i := 0; i < num; i++ {
-				source.Send(getMessage(strconv.Itoa(i)))
+			for i := 0; i < 1000; i++ {
+				source.Send([]byte("{\"job_id\":\"test-job-id-dd\",\"job_type\":\"test-job-type-1\",\"payload\":\"dd\"}"))
 			}
 		}()
-		for {
-			time.Sleep(10 * time.Millisecond)
-			if m.JobCounter() == int64(counter) {
-				counter += num
-				break
-			}
+		for i := 0; i < 1000; i++ {
+			<-returnCh
 		}
 	}
+	m.Shutdown()
 }
 
 func BenchmarkLoops1kJobs(b *testing.B) {
