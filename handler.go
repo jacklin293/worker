@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"worker/queue"
 )
 
@@ -18,8 +19,7 @@ type Handler struct {
 	signalHandler *signalHandler
 	jobCounter    int64
 
-	// TODO
-	// log *io.Writer
+	logger *log.Logger
 }
 
 func New() *Handler { // FIXME func should be named as Project name
@@ -27,6 +27,7 @@ func New() *Handler { // FIXME func should be named as Project name
 	h.fetchers = make(map[string][]*fetcher)
 	h.workers = make(map[string]*worker)
 	h.doneChan = make(chan *Job)
+	h.logger = log.New(os.Stdout, "", log.Ldate|log.Lmicroseconds|log.Lshortfile)
 	h.signalHandler = newSignalHandler()
 	h.signalHandler.beforeClose = h.beforeClose
 	return &h
@@ -35,15 +36,15 @@ func New() *Handler { // FIXME func should be named as Project name
 // Initialisation with config in json
 func (h *Handler) InitWithJsonConfig(conf string) {
 	if err := json.Unmarshal([]byte(conf), &h.config); err != nil {
-		log.Fatalf("Failed to set config. Error: %v\n", err)
+		h.logger.Fatalf("Failed to set config. Error: %v\n", err)
 	}
 	if len(h.config) == 0 {
-		log.Fatal("No queues found")
+		h.logger.Fatal("No queues found")
 	}
 
 	for _, c := range h.config {
 		if err := c.Validate(); err != nil {
-			log.Fatal("Failed to set config. Error: ", err)
+			h.logger.Fatal("Failed to set config. Error: ", err)
 		}
 	}
 
@@ -52,27 +53,14 @@ func (h *Handler) InitWithJsonConfig(conf string) {
 			continue
 		}
 
-		// New queue
-		q, err := c.GetQueueAttr().New()
-		if err != nil {
-			log.Fatal("Failed to new queue. Error: ", err)
-		}
-
-		// New worker
-		w, ok := h.workers[c.Name]
-		if !ok {
-			w = newWorker(c.WorkerConcurrency)
-			h.workers[c.Name] = w
-		}
-		w.config = c
-		w.queue = q
-		w.doneChan = h.doneChan
+		h.newWorker(c)
+		h.newFetcher(c)
 	}
 }
 
 func (h *Handler) Run() {
 	if h.config == nil {
-		log.Fatal("Please set config before running")
+		h.logger.Fatal("Please set config before running")
 	}
 	for _, c := range h.config {
 		if !c.Enabled {
@@ -92,32 +80,58 @@ func (h *Handler) Shutdown() {
 func (h *Handler) beforeClose() {
 	for qName, fetchers := range h.fetchers {
 		for i, f := range fetchers {
-			log.Printf("close fetcher['%s'][%d]\n", qName, i)
+			h.logger.Printf("close fetcher['%s'][%d]\n", qName, i)
 			close(f.stopQueueCh)
 		}
 	}
 }
 
+func (h *Handler) newWorker(c *queue.Config) {
+	// New queue
+	q, err := c.GetQueueAttr().New()
+	if err != nil {
+		h.logger.Fatal("Failed to new queue. Error: ", err)
+	}
+
+	w, ok := h.workers[c.Name]
+	if !ok {
+		w = newWorker(c.WorkerConcurrency)
+		h.workers[c.Name] = w
+	}
+	w.config = c
+	w.queue = q
+	w.doneChan = h.doneChan
+	w.logger = h.logger
+}
+
 // Process messages
 func (h *Handler) runWorkers(c *queue.Config) {
-	w := h.workers[c.Name]
+	w, ok := h.workers[c.Name]
+	if !ok {
+		h.logger.Fatal("Please set config before running worker")
+	}
 	for i := int64(0); i < c.WorkerConcurrency; i++ {
-		go func(w *worker, i int64) {
-			for {
-				j := <-w.receivedChan
-				w.process(i, j)
-			}
-		}(w, i)
+		go w.dispatch(i)
+	}
+}
+
+func (h *Handler) newFetcher(c *queue.Config) {
+	for i := int64(0); i < c.QueueConcurrency; i++ {
+		f := newFetcher()
+		f.worker = h.workers[c.Name]
+		f.signalHandler = h.signalHandler
+		f.logger = h.logger
+		h.fetchers[c.Name] = append(h.fetchers[c.Name], f)
 	}
 }
 
 // Receive messages
 func (h *Handler) runFetchers(c *queue.Config) {
-	for i := int64(0); i < c.QueueConcurrency; i++ {
-		f := newFetcher()
-		f.worker = h.workers[c.Name]
-		f.signalHandler = h.signalHandler
-		h.fetchers[c.Name] = append(h.fetchers[c.Name], f)
+	fs, ok := h.fetchers[c.Name]
+	if !ok {
+		h.logger.Fatal("Please set config before running worker")
+	}
+	for _, f := range fs {
 		go f.receive()
 	}
 }
@@ -133,7 +147,7 @@ func (h *Handler) done() {
 // New job type
 func (h *Handler) RegisterJobType(name string, jobType string, p process) {
 	if name == "" || jobType == "" {
-		log.Fatal("Both queue name and job type can't be empty")
+		h.logger.Fatal("Both queue name and job type can't be empty")
 	}
 	// Prevent panic from not being in the list of config
 	if _, ok := h.workers[name]; !ok {
@@ -179,7 +193,7 @@ func (h *Handler) JobCounter() int64 {
 	return h.jobCounter
 }
 
-// Queue name
+// Get Queue resource by name
 func (h *Handler) Queue(name string) (queue.Queuer, error) {
 	if _, ok := h.workers[name]; ok {
 		return h.workers[name].queue, nil

@@ -13,9 +13,7 @@ type worker struct {
 	receivedChan chan *Job
 	doneChan     chan *Job
 	workerStatus *workerStatus
-
-	// TODO
-	// log *io.Writer
+	logger       *log.Logger
 }
 
 type workerStatus struct {
@@ -31,10 +29,17 @@ func newWorker(concurrency int64) *worker {
 	}
 }
 
+func (w *worker) dispatch(i int64) {
+	for {
+		j := <-w.receivedChan
+		w.process(i, j)
+	}
+}
+
 func (w *worker) process(i int64, j *Job) {
 	defer func() {
 		if e := recover(); e != nil {
-			log.Printf("panic: %v, message: %+v\n", e, j.Desc)
+			w.logger.Printf("panic: %v, message: %+v\n", e, j.Desc)
 			w.doneChan <- j
 		}
 	}()

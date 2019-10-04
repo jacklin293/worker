@@ -10,6 +10,7 @@ type fetcher struct {
 	worker        *worker
 	signalHandler *signalHandler
 	stopQueueCh   chan bool
+	logger        *log.Logger
 }
 
 func newFetcher() *fetcher {
@@ -21,14 +22,14 @@ func (f *fetcher) receive() {
 		// Graceful shutdown
 		select {
 		case <-f.stopQueueCh:
-			log.Println("Stop receiving message and start waiting for the rest of jobs to be done")
+			f.logger.Println("Stop receiving message and start waiting for the rest of jobs to be done")
 			return
 		default:
 		}
 
 		message, err := f.worker.queue.Receive()
 		if err != nil {
-			log.Println("Error: ", err)
+			f.logger.Println("Error: ", err)
 			continue
 		}
 
@@ -41,7 +42,7 @@ func (f *fetcher) receive() {
 			for _, msg := range message.([][]byte) {
 				var j Job
 				if err = f.processMessage(msg, &j); err != nil {
-					log.Printf("Error: %s, message: %s\n", err, string(msg))
+					f.logger.Printf("Error: %s, message: %s\n", err, string(msg))
 				}
 			}
 		case []byte:
@@ -50,10 +51,10 @@ func (f *fetcher) receive() {
 			}
 			var j Job
 			if err = f.processMessage(message.([]byte), &j); err != nil {
-				log.Printf("Error: %s, message: %s\n", err, string(message.([]byte)))
+				f.logger.Printf("Error: %s, message: %s\n", err, string(message.([]byte)))
 			}
 		default:
-			log.Println("Error: unknown type of return from Receive()")
+			f.logger.Println("Error: unknown type of return from Receive()")
 			continue
 		}
 	}
@@ -67,7 +68,7 @@ func (f *fetcher) processMessage(msg []byte, j *Job) (err error) {
 		return
 	}
 	if _, ok := f.worker.jobTypes[j.Desc.JobType]; !ok {
-		log.Printf("Job type '%s'.'%s' not found\n", f.worker.config.Name, j.Desc.JobType)
+		f.logger.Printf("Job type '%s'.'%s' not found\n", f.worker.config.Name, j.Desc.JobType)
 		return
 	}
 	j.receivedAt = time.Now()
