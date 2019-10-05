@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"log"
 	"time"
+	"worker/queue"
 )
 
 type fetcher struct {
+	config        *queue.Config
 	worker        *worker
 	signalHandler *signalHandler
 	stopQueueCh   chan bool
@@ -17,12 +19,12 @@ func newFetcher() *fetcher {
 	return &fetcher{stopQueueCh: make(chan bool)}
 }
 
-func (f *fetcher) receive() {
+func (f *fetcher) receive(i int64) {
 	for {
 		// Graceful shutdown
 		select {
 		case <-f.stopQueueCh:
-			f.logger.Println("Stop receiving message and start waiting for the rest of jobs to be done")
+			f.logger.Printf("Closing %s[%d]\n", f.config.Name, i)
 			return
 		default:
 		}

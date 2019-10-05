@@ -19,7 +19,7 @@ func (c *goChannelConfig) validate() error {
 	return nil
 }
 
-func (c *goChannelConfig) New() (Queuer, error) {
+func (c *goChannelConfig) New() (QueueContainer, error) {
 	return &GoChannel{
 		ch:     make(chan []byte, c.Size),
 		config: c,

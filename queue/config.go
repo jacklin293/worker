@@ -5,9 +5,9 @@ import (
 	"regexp"
 )
 
-type Configure interface {
+type ConfigNewer interface {
 	validate() error
-	New() (Queuer, error)
+	New() (QueueContainer, error)
 }
 
 type Config struct {
@@ -43,8 +43,7 @@ func (c *Config) Validate() (err error) {
 	return
 }
 
-// Convert config into Configure
-func (c *Config) GetQueueAttr() Configure {
+func (c *Config) GetQueueAttr() ConfigNewer {
 	switch c.QueueType {
 	case "sqs":
 		return &c.sqsConfig

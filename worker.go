@@ -8,7 +8,7 @@ import (
 
 type worker struct {
 	config       *queue.Config
-	queue        queue.Queuer
+	queue        queue.QueueContainer
 	jobTypes     map[string]process
 	receivedChan chan *Job
 	doneChan     chan *Job

@@ -52,7 +52,7 @@ func (c *sqsConfig) validate() error {
 	return nil
 }
 
-func (c *sqsConfig) New() (Queuer, error) {
+func (c *sqsConfig) New() (QueueContainer, error) {
 	var endpoint string
 	var err error
 	if c.UseLocalSqs {

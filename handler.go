@@ -3,6 +3,7 @@ package worker
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"worker/queue"
@@ -12,12 +13,12 @@ import (
 type Handler struct {
 	fetchers map[string][]*fetcher
 	workers  map[string]*worker
-	config   []*queue.Config
+	config   *config
 
 	doneChan chan *Job
 
-	signalHandler *signalHandler
-	jobCounter    int64
+	signalHandler  *signalHandler
+	jobDoneCounter int64
 
 	logger *log.Logger
 }
@@ -27,9 +28,10 @@ func New() *Handler { // FIXME func should be named as Project name
 	h.fetchers = make(map[string][]*fetcher)
 	h.workers = make(map[string]*worker)
 	h.doneChan = make(chan *Job)
-	h.logger = log.New(os.Stdout, "", log.Ldate|log.Lmicroseconds|log.Lshortfile)
+	h.logger = log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile)
 	h.signalHandler = newSignalHandler()
 	h.signalHandler.beforeClose = h.beforeClose
+	h.signalHandler.logger = h.logger
 	return &h
 }
 
@@ -38,17 +40,25 @@ func (h *Handler) InitWithJsonConfig(conf string) {
 	if err := json.Unmarshal([]byte(conf), &h.config); err != nil {
 		h.logger.Fatalf("Failed to set config. Error: %v\n", err)
 	}
-	if len(h.config) == 0 {
+	if len(h.config.Queues) == 0 {
 		h.logger.Fatal("No queues found")
 	}
 
-	for _, c := range h.config {
+	// Set shutdown timeout
+	h.signalHandler.shutdownTimeout = h.config.ShutdownTimeout
+
+	if !h.config.LogEnabled {
+		h.logger.SetOutput(ioutil.Discard)
+	}
+
+	for _, c := range h.config.Queues {
 		if err := c.Validate(); err != nil {
 			h.logger.Fatal("Failed to set config. Error: ", err)
 		}
 	}
 
-	for _, c := range h.config {
+	// Initialisation
+	for _, c := range h.config.Queues {
 		if !c.Enabled {
 			continue
 		}
@@ -62,7 +72,7 @@ func (h *Handler) Run() {
 	if h.config == nil {
 		h.logger.Fatal("Please set config before running")
 	}
-	for _, c := range h.config {
+	for _, c := range h.config.Queues {
 		if !c.Enabled {
 			continue
 		}
@@ -78,9 +88,8 @@ func (h *Handler) Shutdown() {
 }
 
 func (h *Handler) beforeClose() {
-	for qName, fetchers := range h.fetchers {
-		for i, f := range fetchers {
-			h.logger.Printf("close fetcher['%s'][%d]\n", qName, i)
+	for _, fetchers := range h.fetchers {
+		for _, f := range fetchers {
 			close(f.stopQueueCh)
 		}
 	}
@@ -121,6 +130,7 @@ func (h *Handler) newFetcher(c *queue.Config) {
 		f.worker = h.workers[c.Name]
 		f.signalHandler = h.signalHandler
 		f.logger = h.logger
+		f.config = c
 		h.fetchers[c.Name] = append(h.fetchers[c.Name], f)
 	}
 }
@@ -131,8 +141,8 @@ func (h *Handler) runFetchers(c *queue.Config) {
 	if !ok {
 		h.logger.Fatal("Please set config before running worker")
 	}
-	for _, f := range fs {
-		go f.receive()
+	for i, f := range fs {
+		go f.receive(int64(i))
 	}
 }
 
@@ -140,7 +150,7 @@ func (h *Handler) done() {
 	for {
 		<-h.doneChan
 		h.signalHandler.wg.Done()
-		h.jobCounter++
+		h.jobDoneCounter++
 	}
 }
 
@@ -189,12 +199,12 @@ func (h *Handler) JobTypeList() map[string][]string {
 	return mm
 }
 
-func (h *Handler) JobCounter() int64 {
-	return h.jobCounter
+func (h *Handler) JobDoneCounter() int64 {
+	return h.jobDoneCounter
 }
 
 // Get Queue resource by name
-func (h *Handler) Queue(name string) (queue.Queuer, error) {
+func (h *Handler) Queue(name string) (queue.QueueContainer, error) {
 	if _, ok := h.workers[name]; ok {
 		return h.workers[name].queue, nil
 	}

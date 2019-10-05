@@ -1,6 +1,6 @@
 package queue
 
-type Queuer interface {
+type QueueContainer interface {
 	Send(interface{}) (interface{}, error)
 	Receive() (interface{}, error)
 }
