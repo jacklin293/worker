@@ -39,7 +39,7 @@ func (w *worker) dispatch(i int64) {
 func (w *worker) process(i int64, j *Job) {
 	defer func() {
 		if e := recover(); e != nil {
-			w.logger.Printf("panic: %v, message: %+v\n", e, j.Desc)
+			w.logger.Printf("panic: %v, message: %+v\n", e, j.descriptor)
 			w.doneChan <- j
 		}
 	}()
@@ -47,7 +47,7 @@ func (w *worker) process(i int64, j *Job) {
 	j.doneChan = w.doneChan
 
 	w.flagWorkerStatus(true, i, j)
-	j.process(w.jobTypes[j.Desc.JobType])
+	j.process(w.jobTypes[j.descriptor.Type])
 	w.flagWorkerStatus(false, i, j)
 }
 

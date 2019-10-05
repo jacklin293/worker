@@ -174,14 +174,14 @@ func (h *Handler) FetcherNum() map[string]int {
 	return mm
 }
 
-func (h *Handler) WorkerStatus() map[string][]Job {
-	mm := make(map[string][]Job)
+func (h *Handler) WorkerStatus() map[string][]*Job {
+	mm := make(map[string][]*Job)
 	for name, w := range h.workers {
-		mm[name] = make([]Job, w.config.WorkerConcurrency)
+		mm[name] = make([]*Job, w.config.WorkerConcurrency)
 		w.workerStatus.mutex.RLock()
 		for i := int64(0); i < w.config.WorkerConcurrency; i++ {
 			if job, ok := w.workerStatus.table[i]; ok {
-				mm[name][i] = *job
+				mm[name][i] = job
 			}
 		}
 		w.workerStatus.mutex.RUnlock()

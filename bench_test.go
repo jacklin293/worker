@@ -26,28 +26,24 @@ var goChannelConfig = `
 `
 
 func getMessage(id string) []byte {
-	return []byte(fmt.Sprintf(`{"job_id":"test-job-id-%s","job_type":"test-job-type-1","payload":"%s"}`, id, id))
+	return []byte(fmt.Sprintf(`{"id":"test-job-id-%s","type":"test-job-type-1","payload":"%s"}`, id, id))
 }
 
 // ------------------------------------------------------------------
 
-type Basic struct {
-	ID  string `json:"id"`
-	Now int64
-}
+type Basic struct{}
 
-// Test Race condition
 func (tj *Basic) Run(j *Job) error       { return nil }
 func (tj *Basic) Done(j *Job, err error) {}
 
-func BenchmarkLoops(b *testing.B) {
+func BenchmarkBasic(b *testing.B) {
 	h := New()
 	h.InitWithJsonConfig(goChannelConfig)
 	h.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &Basic{} })
 	source, _ := h.Queue("queue-1")
 	go func() {
 		for i := 0; i < b.N; i++ {
-			source.Send([]byte("{\"job_id\":\"test-job-id-dd\",\"job_type\":\"test-job-type-1\",\"payload\":\"dd\"}"))
+			source.Send([]byte("{\"id\":\"test-job-id-dd\",\"type\":\"test-job-type-1\",\"payload\":\"dd\"}"))
 		}
 		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the message.
 		h.Shutdown()

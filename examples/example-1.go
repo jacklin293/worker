@@ -10,8 +10,8 @@ import (
 
 var conf = `
 {
+	"shutdown_timeout": 2,
 	"log_enabled": true,
-	"shutdown_timeout": 3,
 	"queues": [
 		{
 			"name":"queue-1",
@@ -53,7 +53,7 @@ var conf = `
 type TestJob struct{}
 
 func (tj *TestJob) Run(j *worker.Job) error {
-	time.Sleep(10000 * time.Millisecond)
+	time.Sleep(5 * time.Second)
 	return nil
 }
 func (tj *TestJob) Done(j *worker.Job, err error) {}
@@ -68,23 +68,18 @@ func main() {
 	h.RegisterJobType("queue-3", "test-job-type-3", func() worker.Process { return &TestJob{} })
 	source, _ := h.Queue("queue-1")
 
-	total := int64(60)
+	total := int64(20)
 	go func(total int64) {
 		go func() {
 			for {
 				time.Sleep(1 * time.Second)
 				log.Println("job done counter: ", h.JobDoneCounter())
-				report(h)
+				// report(h)
 				fmt.Print("\n\n\n")
 			}
 		}()
 		for i := int64(0); i < total; i++ {
 			source.Send(getMessage(strconv.FormatInt(i, 10)))
-			if i == 100 {
-				time.Sleep(2 * time.Second)
-				log.Println("shutdown")
-				h.Shutdown()
-			}
 		}
 	}(total)
 	h.Run()
@@ -92,16 +87,16 @@ func main() {
 }
 
 func getMessage(id string) []byte {
-	return []byte(fmt.Sprintf(`{"job_id":"test-job-id-%s","job_type":"test-job-type-1","payload":"%s"}`, id, id))
+	return []byte(fmt.Sprintf(`{"id":"test-job-id-%s","type":"test-job-type-1","payload":"%s"}`, id, id))
 }
 
 func report(h *worker.Handler) {
 	for qName, ws := range h.WorkerStatus() {
 		for i, j := range ws {
-			if j.Desc.JobType == "" {
+			if j == nil {
 				fmt.Printf("%s[%d]: (idle)\n", qName, i)
 			} else {
-				fmt.Printf("%s[%d]: processing %s\n", qName, i, j.Desc.JobType)
+				fmt.Printf("%s[%d]: processing %s\n", qName, i, j.Id())
 			}
 		}
 	}

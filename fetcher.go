@@ -63,14 +63,14 @@ func (f *fetcher) receive(i int64) {
 }
 
 func (f *fetcher) processMessage(msg []byte, j *Job) (err error) {
-	if err = json.Unmarshal(msg, &j.Desc); err != nil {
+	if err = json.Unmarshal(msg, &j.descriptor); err != nil {
 		return
 	}
 	if err = j.validate(); err != nil {
 		return
 	}
-	if _, ok := f.worker.jobTypes[j.Desc.JobType]; !ok {
-		f.logger.Printf("Job type '%s'.'%s' not found\n", f.worker.config.Name, j.Desc.JobType)
+	if _, ok := f.worker.jobTypes[j.descriptor.Type]; !ok {
+		f.logger.Printf("Job type '%s'.'%s' not found\n", f.worker.config.Name, j.descriptor.Type)
 		return
 	}
 	j.receivedAt = time.Now()

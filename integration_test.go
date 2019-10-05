@@ -76,9 +76,9 @@ const (
 func getMessage(t JobBodyType, id string) []byte {
 	switch t {
 	case bodyTypeString:
-		return []byte(fmt.Sprintf(`{"job_id":"test-job-id-%s","job_type":"test-job-type-1","payload":"%s"}`, id, id))
+		return []byte(fmt.Sprintf(`{"id":"test-job-id-%s","type":"test-job-type-1","payload":"%s"}`, id, id))
 	case bodyTypeMap:
-		return []byte(fmt.Sprintf(`{"job_id":"test-job-id-%s","job_type":"test-job-type-1","payload":"{\"id\":\"%s\",\"timestamp\":%d}"}`, id, id, time.Now().UnixNano()))
+		return []byte(fmt.Sprintf(`{"id":"test-job-id-%s","type":"test-job-type-1","payload":"{\"id\":\"%s\",\"timestamp\":%d}"}`, id, id, time.Now().UnixNano()))
 	}
 	return []byte{}
 }
@@ -86,23 +86,19 @@ func getMessage(t JobBodyType, id string) []byte {
 // ------------------------------------------------------------------
 
 // Test basic function
-type Basic struct{ ReturnCh chan string }
+type Run struct{ ReturnCh chan string }
 
-func (tj *Basic) Run(j *Job) error       { return nil }
-func (tj *Basic) Done(j *Job, err error) { tj.ReturnCh <- j.Desc.Payload.(string) }
+func (jt *Run) Run(j *Job) error       { jt.ReturnCh <- "foo"; return nil }
+func (jt *Run) Done(j *Job, err error) {}
 
-func TestBasicJob(t *testing.T) {
+func TestRun(t *testing.T) {
 	t.Parallel()
 	returnCh := make(chan string)
 
 	h := New()
 	h.InitWithJsonConfig(goChannelConfig)
-	h.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &Basic{ReturnCh: returnCh} })
-	s, err := h.Queue("queue-1")
-	if err != nil {
-		t.Log(err)
-		return
-	}
+	h.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &Run{ReturnCh: returnCh} })
+	s, _ := h.Queue("queue-1")
 	go h.Run()
 	s.Send(getMessage(bodyTypeString, "foo"))
 	assert.Equal(t, "foo", <-returnCh)
@@ -119,7 +115,7 @@ type Done struct {
 func (t *Done) Run(j *Job) error       { t.ID = "foo"; return nil }
 func (t *Done) Done(j *Job, err error) { t.ReturnCh <- t.ID }
 
-func TestDoneJob(t *testing.T) {
+func TestDone(t *testing.T) {
 	t.Parallel()
 	returnCh := make(chan string)
 
@@ -141,7 +137,7 @@ type Err struct{ ReturnCh chan string }
 func (t *Err) Run(j *Job) error       { return errors.New("error") }
 func (t *Err) Done(j *Job, err error) { t.ReturnCh <- err.Error() }
 
-func TestErrJob(t *testing.T) {
+func TestErr(t *testing.T) {
 	t.Parallel()
 	returnCh := make(chan string)
 
@@ -157,27 +153,122 @@ func TestErrJob(t *testing.T) {
 
 // ------------------------------------------------------------------
 
-// Test pointer struct (run)
-type PointerStructRun struct {
+type JobStructRun struct{ ReturnCh chan interface{} }
+
+func (jt *JobStructRun) Run(j *Job) error {
+	jt.ReturnCh <- j.Id()
+	jt.ReturnCh <- j.Type()
+	jt.ReturnCh <- j.Payload()
+	jt.ReturnCh <- j.ReceivedAt().IsZero()
+	jt.ReturnCh <- j.DoneAt().IsZero()
+	jt.ReturnCh <- j.Duration()
+	return nil
+}
+func (jt *JobStructRun) Done(j *Job, err error) {}
+
+func TestJobStructRun(t *testing.T) {
+	t.Parallel()
+	returnCh := make(chan interface{})
+
+	h := New()
+	h.InitWithJsonConfig(goChannelConfig)
+	h.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &JobStructRun{ReturnCh: returnCh} })
+	s, err := h.Queue("queue-1")
+	if err != nil {
+		t.Log(err)
+		return
+	}
+	go h.Run()
+	s.Send(getMessage(bodyTypeString, "foo"))
+	id := <-returnCh
+	assert.Equal(t, "test-job-id-foo", id.(string))
+	typ := <-returnCh
+	assert.Equal(t, "test-job-type-1", typ.(string))
+	payload := <-returnCh
+	assert.Equal(t, "foo", payload.(string))
+	receivedAt := <-returnCh
+	assert.Equal(t, false, receivedAt.(bool))
+	doneAt := <-returnCh
+	assert.Equal(t, true, doneAt.(bool))
+	duration := <-returnCh
+	assert.Equal(t, "0s", duration.(time.Duration).String())
+}
+
+// ------------------------------------------------------------------
+
+type JobStructDone struct{ ReturnCh chan interface{} }
+
+func (jt *JobStructDone) Run(j *Job) error { jt.ReturnCh <- j.Payload(); return nil }
+func (jt *JobStructDone) Done(j *Job, err error) {
+	jt.ReturnCh <- j.Id()
+	jt.ReturnCh <- j.Type()
+	jt.ReturnCh <- j.Payload()
+	jt.ReturnCh <- j.ReceivedAt().IsZero()
+	jt.ReturnCh <- j.DoneAt().IsZero()
+	jt.ReturnCh <- j.Duration()
+}
+
+func TestJobStructDone(t *testing.T) {
+	t.Parallel()
+	returnCh := make(chan interface{})
+
+	h := New()
+	h.InitWithJsonConfig(goChannelConfig)
+	h.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &JobStructDone{ReturnCh: returnCh} })
+	s, err := h.Queue("queue-1")
+	if err != nil {
+		t.Log(err)
+		return
+	}
+	go h.Run()
+	payload := getMessage(bodyTypeMap, "foo")
+	s.Send(payload)
+
+	job := map[string]interface{}{}
+	json.Unmarshal(payload, &job)
+
+	// Test case of job payload using map
+	payloadRun := <-returnCh
+	assert.Equal(t, job["payload"], payloadRun)
+
+	id := <-returnCh
+	assert.Equal(t, job["id"], id)
+	typ := <-returnCh
+	assert.Equal(t, job["type"], typ)
+	payloadDone := <-returnCh
+	assert.Equal(t, job["payload"], payloadDone)
+	receivedAt := <-returnCh
+	assert.Equal(t, false, receivedAt.(bool))
+	doneAt := <-returnCh
+	assert.Equal(t, false, doneAt.(bool))
+	duration := <-returnCh
+	assert.NotEqual(t, "0s", duration.(time.Duration).String())
+}
+
+// ------------------------------------------------------------------
+
+// Test pointer job type (run)
+// Not only does it test job type, it also test job struct
+type PointerJobTypeRun struct {
 	ID       string `json:"id"`
 	ReturnCh chan string
 }
 
-func (tj *PointerStructRun) Run(j *Job) error {
-	json.Unmarshal([]byte(j.Desc.Payload.(string)), &tj)
+func (jt *PointerJobTypeRun) Run(j *Job) error {
+	json.Unmarshal([]byte(j.Payload().(string)), &jt)
 	time.Sleep(300 * time.Millisecond)
-	tj.ReturnCh <- tj.ID
+	jt.ReturnCh <- jt.ID
 	return nil
 }
-func (tj *PointerStructRun) Done(j *Job, err error) {}
+func (jt *PointerJobTypeRun) Done(j *Job, err error) {}
 
-func TestPointerStructRunJob(t *testing.T) {
+func TestPointerJobTypeRun(t *testing.T) {
 	t.Parallel()
 	returnCh := make(chan string)
 
 	h := New()
 	h.InitWithJsonConfig(goChannelConfig)
-	h.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &PointerStructRun{ReturnCh: returnCh} })
+	h.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &PointerJobTypeRun{ReturnCh: returnCh} })
 	s, _ := h.Queue("queue-1")
 	go h.Run()
 
@@ -192,26 +283,26 @@ func TestPointerStructRunJob(t *testing.T) {
 
 // ------------------------------------------------------------------
 
-// Test pointer struct (done)
-type PointerStructDone struct {
+// Test pointer job type (done)
+type PointerJobTypeDone struct {
 	ID       string `json:"id"`
 	ReturnCh chan string
 }
 
-func (tj *PointerStructDone) Run(j *Job) error {
-	json.Unmarshal([]byte(j.Desc.Payload.(string)), &tj)
+func (jt *PointerJobTypeDone) Run(j *Job) error {
+	json.Unmarshal([]byte(j.Payload().(string)), &jt)
 	time.Sleep(300 * time.Millisecond)
 	return nil
 }
-func (tj *PointerStructDone) Done(j *Job, err error) { tj.ReturnCh <- tj.ID }
+func (jt *PointerJobTypeDone) Done(j *Job, err error) { jt.ReturnCh <- jt.ID }
 
-func TestPointerStructDoneJob(t *testing.T) {
+func TestPointerJobTypeDone(t *testing.T) {
 	t.Parallel()
 	returnCh := make(chan string)
 
 	h := New()
 	h.InitWithJsonConfig(goChannelConfig)
-	h.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &PointerStructDone{ReturnCh: returnCh} })
+	h.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &PointerJobTypeDone{ReturnCh: returnCh} })
 	s, _ := h.Queue("queue-1")
 	go h.Run()
 
@@ -227,27 +318,27 @@ func TestPointerStructDoneJob(t *testing.T) {
 // ------------------------------------------------------------------
 
 // Test pointer struct (custom)
-type PointerStructCustom struct {
+type PointerJobTypeCustom struct {
 	ID       string `json:"id"`
 	ReturnCh chan string
 }
 
-func (tj *PointerStructCustom) Run(j *Job) error {
-	json.Unmarshal([]byte(j.Desc.Payload.(string)), &tj)
+func (jt *PointerJobTypeCustom) Run(j *Job) error {
+	json.Unmarshal([]byte(j.Payload().(string)), &jt)
 	time.Sleep(300 * time.Millisecond)
-	tj.Custom()
+	jt.Custom()
 	return nil
 }
-func (tj *PointerStructCustom) Done(j *Job, err error) {}
-func (tj *PointerStructCustom) Custom()                { tj.ReturnCh <- tj.ID }
+func (jt *PointerJobTypeCustom) Done(j *Job, err error) {}
+func (jt *PointerJobTypeCustom) Custom()                { jt.ReturnCh <- jt.ID }
 
-func TestPointerStructCustomJob(t *testing.T) {
+func TestPointerStructCustom(t *testing.T) {
 	t.Parallel()
 	returnCh := make(chan string)
 
 	h := New()
 	h.InitWithJsonConfig(goChannelConfig)
-	h.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &PointerStructCustom{ReturnCh: returnCh} })
+	h.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &PointerJobTypeCustom{ReturnCh: returnCh} })
 	s, _ := h.Queue("queue-1")
 	go h.Run()
 
@@ -263,26 +354,26 @@ func TestPointerStructCustomJob(t *testing.T) {
 // ------------------------------------------------------------------
 
 // Test pointer struct (done->custom)
-type PointerStructDoneCustom struct {
+type PointerJobTypeDoneCustom struct {
 	ID       string `json:"id"`
 	ReturnCh chan string
 }
 
-func (tj *PointerStructDoneCustom) Run(j *Job) error {
-	json.Unmarshal([]byte(j.Desc.Payload.(string)), &tj)
+func (jt *PointerJobTypeDoneCustom) Run(j *Job) error {
+	json.Unmarshal([]byte(j.Payload().(string)), &jt)
 	time.Sleep(300 * time.Millisecond)
 	return nil
 }
-func (tj *PointerStructDoneCustom) Done(j *Job, err error) { tj.ID = tj.ID + "/done"; tj.Custom() }
-func (tj *PointerStructDoneCustom) Custom()                { tj.ReturnCh <- tj.ID }
+func (jt *PointerJobTypeDoneCustom) Done(j *Job, err error) { jt.ID = jt.ID + "/done"; jt.Custom() }
+func (jt *PointerJobTypeDoneCustom) Custom()                { jt.ReturnCh <- jt.ID }
 
-func TestPointerStructDoneCustomJob(t *testing.T) {
+func TestPointerStructDoneCustom(t *testing.T) {
 	t.Parallel()
 	returnCh := make(chan string)
 
 	h := New()
 	h.InitWithJsonConfig(goChannelConfig)
-	h.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &PointerStructDoneCustom{ReturnCh: returnCh} })
+	h.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &PointerJobTypeDoneCustom{ReturnCh: returnCh} })
 	s, _ := h.Queue("queue-1")
 	go h.Run()
 
@@ -300,10 +391,10 @@ func TestPointerStructDoneCustomJob(t *testing.T) {
 // Test panic in Run
 type PanicRun struct{}
 
-func (tj *PanicRun) Run(j *Job) error       { panic("panic in Run"); return nil }
-func (tj *PanicRun) Done(j *Job, err error) {}
+func (jt *PanicRun) Run(j *Job) error       { panic("panic in Run"); return nil }
+func (jt *PanicRun) Done(j *Job, err error) {}
 
-func TestPanicRunJob(t *testing.T) {
+func TestPanicRun(t *testing.T) {
 	t.Parallel()
 	h := New()
 	h.InitWithJsonConfig(goChannelConfig)
@@ -323,10 +414,10 @@ func TestPanicRunJob(t *testing.T) {
 // Test panic in Done
 type PanicDone struct{}
 
-func (tj *PanicDone) Run(j *Job) error       { return nil }
-func (tj *PanicDone) Done(j *Job, err error) { panic("panic in Done") }
+func (jt *PanicDone) Run(j *Job) error       { return nil }
+func (jt *PanicDone) Done(j *Job, err error) { panic("panic in Done") }
 
-func TestPanicDoneJob(t *testing.T) {
+func TestPanicDone(t *testing.T) {
 	t.Parallel()
 	h := New()
 	h.InitWithJsonConfig(goChannelConfig)
@@ -346,11 +437,11 @@ func TestPanicDoneJob(t *testing.T) {
 // Test panic in Custom func
 type PanicCustom struct{}
 
-func (tj *PanicCustom) Run(j *Job) error       { return nil }
-func (tj *PanicCustom) Done(j *Job, err error) { tj.Custom() }
-func (tj *PanicCustom) Custom()                { panic("panic in Custom") }
+func (jt *PanicCustom) Run(j *Job) error       { return nil }
+func (jt *PanicCustom) Done(j *Job, err error) { jt.Custom() }
+func (jt *PanicCustom) Custom()                { panic("panic in Custom") }
 
-func TestPanicCustomJob(t *testing.T) {
+func TestPanicCustom(t *testing.T) {
 	t.Parallel()
 	h := New()
 	h.InitWithJsonConfig(goChannelConfig)
@@ -370,8 +461,8 @@ func TestPanicCustomJob(t *testing.T) {
 // Test go_channel
 type GoChannel struct{}
 
-func (tj *GoChannel) Run(j *Job) error       { return nil }
-func (tj *GoChannel) Done(j *Job, err error) {}
+func (jt *GoChannel) Run(j *Job) error       { return nil }
+func (jt *GoChannel) Done(j *Job, err error) {}
 
 func TestGoChannel100Jobs(t *testing.T) {
 	t.Parallel()
@@ -398,8 +489,8 @@ func TestGoChannel100Jobs(t *testing.T) {
 // Test SQS
 type SQS struct{}
 
-func (tj *SQS) Run(j *Job) error       { return nil }
-func (tj *SQS) Done(j *Job, err error) {}
+func (jt *SQS) Run(j *Job) error       { return nil }
+func (jt *SQS) Done(j *Job, err error) {}
 
 func TestSqs100Jobs(t *testing.T) {
 	h := New()
@@ -425,8 +516,8 @@ func TestSqs100Jobs(t *testing.T) {
 // Test graceful shutdown with 50k jobs
 type GracefulShutdown struct{}
 
-func (tj *GracefulShutdown) Run(j *Job) error       { return nil }
-func (tj *GracefulShutdown) Done(j *Job, err error) {}
+func (jt *GracefulShutdown) Run(j *Job) error       { return nil }
+func (jt *GracefulShutdown) Done(j *Job, err error) {}
 
 func TestGracefulShutdown(t *testing.T) {
 	t.Parallel()
@@ -452,8 +543,8 @@ func TestGracefulShutdown(t *testing.T) {
 
 type ShutdownWithoutTimeout struct{}
 
-func (tj *ShutdownWithoutTimeout) Run(j *Job) error       { time.Sleep(2 * time.Second); return nil }
-func (tj *ShutdownWithoutTimeout) Done(j *Job, err error) {}
+func (jt *ShutdownWithoutTimeout) Run(j *Job) error       { time.Sleep(2 * time.Second); return nil }
+func (jt *ShutdownWithoutTimeout) Done(j *Job, err error) {}
 
 func TestShutdownWithoutTimeout(t *testing.T) {
 	t.Parallel()
@@ -483,8 +574,8 @@ func TestShutdownWithoutTimeout(t *testing.T) {
 
 type ShutdownWithTimeout struct{}
 
-func (tj *ShutdownWithTimeout) Run(j *Job) error       { time.Sleep(10 * time.Second); return nil }
-func (tj *ShutdownWithTimeout) Done(j *Job, err error) {}
+func (jt *ShutdownWithTimeout) Run(j *Job) error       { time.Sleep(10 * time.Second); return nil }
+func (jt *ShutdownWithTimeout) Done(j *Job, err error) {}
 
 func TestShutdownWithTimeout(t *testing.T) {
 	t.Parallel()
