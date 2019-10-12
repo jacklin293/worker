@@ -57,12 +57,15 @@ func (h *Handler) InitWithJsonConfig(conf string) {
 		}
 	}
 
-	// Initialisation
+	h.init()
+}
+
+// Initialisation
+func (h *Handler) init() {
 	for _, c := range h.config.Queues {
 		if !c.Enabled {
 			continue
 		}
-
 		h.newWorker(c)
 		h.newFetcher(c)
 	}

@@ -4,14 +4,14 @@ quick:
 	go test -v -tags=integration -run TestBasicJob
 unit:
 	go clean -testcache
-	go test -v -tags=unit -cover ./...
+	go test -v -tags=unit -cover `go list ./... | grep -v examples`
 integration:
 	go clean -testcache
-	go test -v -tags=integration -cover ./...
+	go test -v -tags=integration -cover `go list ./... | grep -v examples`
 cover:
-	go test -v -tags=unit ./... -coverprofile=unit-coverage.out
+	go test -v -tags=unit `go list ./... | grep -v examples` -coverprofile=unit-coverage.out
 	go tool cover -html=unit-coverage.out
-	go test -v -tags=integration ./... -coverprofile=integration-coverage.out
+	go test -v -tags=integration `go list ./... | grep -v examples` -coverprofile=integration-coverage.out
 	go tool cover -html=integration-coverage.out
 bench:
 	go test -v -tags=bench -bench=. -run=^a -benchmem
@@ -35,5 +35,5 @@ lint:
 	golangci-lint run
 clean:
 	rm *.out *.svg *.pdf worker.test
-build:
+build-dev:
 	docker-compose up -d

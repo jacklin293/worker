@@ -52,8 +52,10 @@ func (s *signalHandler) shutdown() {
 		defer close(c)
 		s.wg.Wait()
 	}()
+	var cancel context.CancelFunc
 	if s.shutdownTimeout > 0 {
-		s.ctx, _ = context.WithTimeout(s.ctx, time.Duration(s.shutdownTimeout)*time.Second)
+		s.ctx, cancel = context.WithTimeout(s.ctx, time.Duration(s.shutdownTimeout)*time.Second)
+		defer cancel()
 	}
 	select {
 	case <-c:

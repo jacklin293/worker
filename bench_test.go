@@ -3,7 +3,6 @@
 package worker
 
 import (
-	"fmt"
 	"testing"
 	"time"
 )
@@ -25,12 +24,6 @@ var goChannelConfig = `
 }
 `
 
-func getMessage(id string) []byte {
-	return []byte(fmt.Sprintf(`{"id":"test-job-id-%s","type":"test-job-type-1","payload":"%s"}`, id, id))
-}
-
-// ------------------------------------------------------------------
-
 type Basic struct{}
 
 func (tj *Basic) Run(j *Job) error       { return nil }
@@ -51,5 +44,3 @@ func BenchmarkBasic(b *testing.B) {
 	h.Run()
 	b.Logf("counter/total: %d/%d\n", h.JobDoneCounter(), b.N)
 }
-
-// ------------------------------------------------------------------
