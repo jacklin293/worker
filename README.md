@@ -1,7 +1,25 @@
-# TODO
+# Project name
 
+TODO
 
-# Benchmark
+## Features
+
+* TODO
+* TODO
+
+## Installation
+
+    go get ...
+
+## Get started
+
+A few motivating and useful examples of how your product can be used. Spice this up with code blocks and potentially more screenshots.
+
+For more examples and usage, please refer to the Wiki.
+
+## Documentation
+
+## Benchmark
 
     go test -v -tags=bench -bench=. -run=^a -benchmem
     goos: darwin
@@ -19,48 +37,12 @@
     PASS
     ok      worker  3.167s
 
-# Contribute
+## FAQ
 
-### Run testing
+## Contributing
 
-    make unit
-    make integration
+## Release History
 
-### Coding convention checking
-
-    make lint
+## License
 
 
-### Run benchmark
-
-    make bench
-
-### Build development environment
-
-    make build-dev
-
-### pprof
-
-Install
-
-    brew install graphviz
-
-Command
-
-    make bench
-    make pprof
-
-### go-torch
-
-Insteall
-
-    go get -u github.com/google/pprof
-
-project directory
-
-    git clone https://github.com/brendangregg/FlameGraph
-
-Command
-
-    make bench
-    make torch
