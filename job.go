@@ -10,7 +10,7 @@ type Process interface {
 	Done(*Job, error)
 }
 
-type process func() Process
+type jobTypeFunc func() Process
 
 type Job struct {
 	descriptor descriptor
@@ -46,8 +46,8 @@ func (j *Job) validate() (err error) {
 	return
 }
 
-func (j *Job) process(p process) {
-	jb := p()
+func (j *Job) process(f jobTypeFunc) {
+	jb := f()
 	err := jb.Run(j)
 	j.done(jb, err)
 	j.doneChan <- j

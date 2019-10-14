@@ -9,7 +9,7 @@ import (
 type worker struct {
 	config       *queue.Config
 	queue        queue.QueueContainer
-	jobTypes     map[string]process
+	jobTypes     map[string]jobTypeFunc
 	receivedChan chan *Job
 	doneChan     chan *Job
 	workerStatus *workerStatus
@@ -24,7 +24,7 @@ type workerStatus struct {
 func newWorker(concurrency int64) *worker {
 	return &worker{
 		receivedChan: make(chan *Job),
-		jobTypes:     make(map[string]process),
+		jobTypes:     make(map[string]jobTypeFunc),
 		workerStatus: &workerStatus{table: make(map[int64]*Job, concurrency)},
 	}
 }

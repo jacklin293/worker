@@ -158,15 +158,15 @@ func (h *Handler) done() {
 }
 
 // New job type
-func (h *Handler) RegisterJobType(name string, jobType string, p process) {
-	if name == "" || jobType == "" {
-		h.logger.Fatal("Both queue name and job type can't be empty")
+func (h *Handler) RegisterJobType(name string, jobType string, f jobTypeFunc) {
+	if name == "" || jobType == "" || f == nil {
+		h.logger.Fatal("Either queue name, job type or func is empty")
 	}
 	// Prevent panic from not being in the list of config
 	if _, ok := h.workers[name]; !ok {
 		return
 	}
-	h.workers[name].jobTypes[jobType] = p
+	h.workers[name].jobTypes[jobType] = f
 }
 
 func (h *Handler) FetcherNum() map[string]int {
