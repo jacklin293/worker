@@ -28,19 +28,19 @@ var conf = `
 // Implementation of job type
 type TestJob struct{}
 
-func (tj *TestJob) Run(j *worker.Job) error {
-	fmt.Println("Processing job", j.Payload())
+func (tj *TestJob) Run(m worker.Messenger) error {
+	fmt.Println("Processing job", m.Payload())
 	return nil
 }
-func (tj *TestJob) Done(j *worker.Job, err error) {}
+func (tj *TestJob) Done(j worker.Messenger, err error) {}
 
 func main() {
 	// New worker
 	h := worker.New()
-	h.InitWithJsonConfig(conf)
+	h.SetConfig(conf)
 
 	// Register job type
-	h.RegisterJobType("queue-1", "test-job-type-1", func() worker.Process { return &TestJob{} })
+	h.RegisterJobType("queue-1", "test-job-type-1", func() worker.Job { return &TestJob{} })
 
 	total := int64(10)
 	go func(total int64) {

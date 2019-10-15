@@ -1,4 +1,13 @@
-# Examples
+# Get started
+
+Download this repository
+
+    git clone https://github.com/jacklin293/worker
+    cd worker/examples
+
+Run examples
+
+## Examples
 
 Use go channel, no dependency needed
 

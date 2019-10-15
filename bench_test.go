@@ -24,15 +24,15 @@ var goChannelConfig = `
 }
 `
 
-type Basic struct{}
+type GoChannel struct{}
 
-func (tj *Basic) Run(j *Job) error       { return nil }
-func (tj *Basic) Done(j *Job, err error) {}
+func (tj *GoChannel) Run(m Messenger) error       { return nil }
+func (tj *GoChannel) Done(m Messenger, err error) {}
 
-func BenchmarkBasic(b *testing.B) {
+func BenchmarkGoChannel(b *testing.B) {
 	h := New()
-	h.InitWithJsonConfig(goChannelConfig)
-	h.RegisterJobType("queue-1", "test-job-type-1", func() Process { return &Basic{} })
+	h.SetConfig(goChannelConfig)
+	h.RegisterJobType("queue-1", "test-job-type-1", func() Job { return &GoChannel{} })
 	source, _ := h.Queue("queue-1")
 	go func() {
 		for i := 0; i < b.N; i++ {

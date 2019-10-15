@@ -11,23 +11,20 @@ import (
 
 // ProjectName
 type Handler struct {
-	fetchers map[string][]*fetcher
-	workers  map[string]*worker
-	config   *config
-
-	doneChan chan *Job
-
-	signalHandler  *signalHandler
-	jobDoneCounter int64
-
-	logger *log.Logger
+	config             *config
+	doneChan           chan *message
+	fetchers           map[string][]*fetcher
+	messageDoneCounter int64
+	logger             *log.Logger
+	signalHandler      *signalHandler
+	workers            map[string]*worker
 }
 
 func New() *Handler { // FIXME func should be named as Project name
 	var h Handler
 	h.fetchers = make(map[string][]*fetcher)
 	h.workers = make(map[string]*worker)
-	h.doneChan = make(chan *Job)
+	h.doneChan = make(chan *message)
 	h.logger = log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile)
 	h.signalHandler = newSignalHandler()
 	h.signalHandler.beforeClose = h.beforeClose
@@ -36,7 +33,7 @@ func New() *Handler { // FIXME func should be named as Project name
 }
 
 // Initialisation with config in json
-func (h *Handler) InitWithJsonConfig(conf string) {
+func (h *Handler) SetConfig(conf string) {
 	if err := json.Unmarshal([]byte(conf), &h.config); err != nil {
 		h.logger.Fatalf("Failed to set config. Error: %v\n", err)
 	}
@@ -100,7 +97,7 @@ func (h *Handler) beforeClose() {
 
 func (h *Handler) newWorker(c *queue.Config) {
 	// New queue
-	q, err := c.GetQueueAttr().New()
+	q, err := c.QueueAttr().New()
 	if err != nil {
 		h.logger.Fatal("Failed to new queue. Error: ", err)
 	}
@@ -153,7 +150,7 @@ func (h *Handler) done() {
 	for {
 		<-h.doneChan
 		h.signalHandler.wg.Done()
-		h.jobDoneCounter++
+		h.messageDoneCounter++
 	}
 }
 
@@ -177,14 +174,14 @@ func (h *Handler) FetcherNum() map[string]int {
 	return mm
 }
 
-func (h *Handler) WorkerStatus() map[string][]*Job {
-	mm := make(map[string][]*Job)
+func (h *Handler) WorkerStatus() map[string][]*message {
+	mm := make(map[string][]*message)
 	for name, w := range h.workers {
-		mm[name] = make([]*Job, w.config.WorkerConcurrency)
+		mm[name] = make([]*message, w.config.WorkerConcurrency)
 		w.workerStatus.mutex.RLock()
 		for i := int64(0); i < w.config.WorkerConcurrency; i++ {
-			if job, ok := w.workerStatus.table[i]; ok {
-				mm[name][i] = job
+			if message, ok := w.workerStatus.list[i]; ok {
+				mm[name][i] = message
 			}
 		}
 		w.workerStatus.mutex.RUnlock()
@@ -203,7 +200,7 @@ func (h *Handler) JobTypeList() map[string][]string {
 }
 
 func (h *Handler) JobDoneCounter() int64 {
-	return h.jobDoneCounter
+	return h.messageDoneCounter
 }
 
 // Get Queue resource by name

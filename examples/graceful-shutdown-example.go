@@ -38,21 +38,21 @@ var conf = `
 // Implementation of job type
 type TestJob struct{}
 
-func (tj *TestJob) Run(j *worker.Job) error {
+func (tj *TestJob) Run(m worker.Messenger) error {
 	time.Sleep(3 * time.Second)
 	return nil
 }
-func (tj *TestJob) Done(j *worker.Job, err error) {}
+func (tj *TestJob) Done(m worker.Messenger, err error) {}
 
 func main() {
 	// New worker
 	h := worker.New()
-	h.InitWithJsonConfig(conf)
+	h.SetConfig(conf)
 
 	// Register job types
-	h.RegisterJobType("queue-1", "test-job-type-1", func() worker.Process { return &TestJob{} })
-	h.RegisterJobType("queue-1", "test-job-type-2", func() worker.Process { return &TestJob{} })
-	h.RegisterJobType("queue-3", "test-job-type-3", func() worker.Process { return &TestJob{} })
+	h.RegisterJobType("queue-1", "test-job-type-1", func() worker.Job { return &TestJob{} })
+	h.RegisterJobType("queue-1", "test-job-type-2", func() worker.Job { return &TestJob{} })
+	h.RegisterJobType("queue-3", "test-job-type-3", func() worker.Job { return &TestJob{} })
 
 	// (for demo) Get the queue for enqueuing
 

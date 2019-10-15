@@ -9,10 +9,10 @@ import (
 
 type fetcher struct {
 	config        *queue.Config
-	worker        *worker
-	signalHandler *signalHandler
-	stopQueueCh   chan bool
 	logger        *log.Logger
+	stopQueueCh   chan bool
+	signalHandler *signalHandler
+	worker        *worker
 }
 
 func newFetcher() *fetcher {
@@ -29,31 +29,31 @@ func (f *fetcher) receive(i int64) {
 		default:
 		}
 
-		message, err := f.worker.queue.Receive()
+		text, err := f.worker.queue.Receive()
 		if err != nil {
 			f.logger.Println("Error: ", err)
 			continue
 		}
 
 		// Check the type of return from Receive()
-		switch message.(type) {
+		switch text.(type) {
 		case [][]byte:
-			if len(message.([][]byte)) == 0 {
+			if len(text.([][]byte)) == 0 {
 				continue
 			}
-			for _, msg := range message.([][]byte) {
-				var j Job
-				if err = f.processMessage(msg, &j); err != nil {
-					f.logger.Printf("Error: %s, message: %s\n", err, string(msg))
+			for _, payload := range text.([][]byte) {
+				var msg message
+				if err = f.processMessage(payload, &msg); err != nil {
+					f.logger.Printf("Error: %s, message: %s\n", err, string(payload))
 				}
 			}
 		case []byte:
-			if len(message.([]byte)) == 0 {
+			if len(text.([]byte)) == 0 {
 				continue
 			}
-			var j Job
-			if err = f.processMessage(message.([]byte), &j); err != nil {
-				f.logger.Printf("Error: %s, message: %s\n", err, string(message.([]byte)))
+			var msg message
+			if err = f.processMessage(text.([]byte), &msg); err != nil {
+				f.logger.Printf("Error: %s, message: %s\n", err, string(text.([]byte)))
 			}
 		default:
 			f.logger.Println("Error: unknown type of return from Receive()")
@@ -62,19 +62,19 @@ func (f *fetcher) receive(i int64) {
 	}
 }
 
-func (f *fetcher) processMessage(msg []byte, j *Job) (err error) {
-	if err = json.Unmarshal(msg, &j.descriptor); err != nil {
+func (f *fetcher) processMessage(payload []byte, msg *message) (err error) {
+	if err = json.Unmarshal(payload, &msg.descriptor); err != nil {
 		return
 	}
-	if err = j.validate(); err != nil {
+	if err = msg.validate(); err != nil {
 		return
 	}
-	if _, ok := f.worker.jobTypes[j.descriptor.Type]; !ok {
-		f.logger.Printf("Job type '%s'.'%s' not found\n", f.worker.config.Name, j.descriptor.Type)
+	if _, ok := f.worker.jobTypes[msg.descriptor.Type]; !ok {
+		f.logger.Printf("Job type '%s'.'%s' not found\n", f.worker.config.Name, msg.descriptor.Type)
 		return
 	}
-	j.receivedAt = time.Now()
+	msg.receivedAt = time.Now()
 	f.signalHandler.wg.Add(1)
-	f.worker.receivedChan <- j
+	f.worker.receivedChan <- msg
 	return
 }

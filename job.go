@@ -5,80 +5,88 @@ import (
 	"time"
 )
 
-type Process interface {
-	Run(*Job) error
-	Done(*Job, error)
+type Job interface {
+	Run(Messenger) error
+	Done(Messenger, error)
 }
 
-type jobTypeFunc func() Process
+type Messenger interface {
+	Id() string
+	Type() string
+	Payload() interface{}
+	ReceivedAt() time.Time
+	DoneAt() time.Time
+	Duration() time.Duration
+}
 
-type Job struct {
+type jobTypeFunc func() Job
+
+type message struct {
 	descriptor descriptor
-	receivedAt time.Time
 	doneAt     time.Time
+	doneChan   chan *message
 	duration   time.Duration
-
-	doneChan chan *Job
+	receivedAt time.Time
 }
 
 type descriptor struct {
 	// UUID V4
 	Id string `json:"id"`
 
+	// Task body of task
+	Payload interface{} `json:"payload"`
+
 	// Job type
 	// e.g. transactions_backup
 	Type string `json:"type"`
-
-	// Task body of task
-	Payload interface{} `json:"payload"`
 }
 
-func (j *Job) validate() (err error) {
-	if j.descriptor.Id == "" {
+func (msg *message) validate() (err error) {
+	if msg.descriptor.Id == "" {
 		return fmt.Errorf("Job Id can't be empty")
 	}
-	if j.descriptor.Type == "" {
+	if msg.descriptor.Type == "" {
 		return fmt.Errorf("Job type can't be empty")
 	}
-	if j.descriptor.Payload == "" {
+	if msg.descriptor.Payload == "" {
 		return fmt.Errorf("Payload can't be empty")
 	}
 	return
 }
 
-func (j *Job) process(f jobTypeFunc) {
-	jb := f()
-	err := jb.Run(j)
-	j.done(jb, err)
-	j.doneChan <- j
+func (msg *message) process(f jobTypeFunc) {
+	j := f()
+	err := j.Run(msg)
+	msg.done(j, err)
+	msg.doneChan <- msg
 }
 
-func (j *Job) done(jb Process, err error) {
-	j.doneAt = time.Now()
-	j.duration = j.doneAt.Sub(j.receivedAt)
-	jb.Done(j, err)
+func (msg *message) done(j Job, err error) {
+	msg.doneAt = time.Now()
+	msg.duration = msg.doneAt.Sub(msg.receivedAt)
+	j.Done(msg, err)
 }
 
-func (j *Job) Id() string {
-	return j.descriptor.Id
+func (msg *message) Id() string {
+	return msg.descriptor.Id
 }
 
-func (j *Job) Type() string {
-	return j.descriptor.Type
+func (msg *message) Type() string {
+	return msg.descriptor.Type
 }
 
-func (j *Job) Payload() interface{} {
-	return j.descriptor.Payload
+func (msg *message) Payload() interface{} {
+	return msg.descriptor.Payload
 }
 
-func (j *Job) ReceivedAt() time.Time {
-	return j.receivedAt
+func (msg *message) ReceivedAt() time.Time {
+	return msg.receivedAt
 }
 
-func (j *Job) DoneAt() time.Time {
-	return j.doneAt
+func (msg *message) DoneAt() time.Time {
+	return msg.doneAt
 }
 
-func (j *Job) Duration() time.Duration {
-	return j.duration
+func (msg *message) Duration() time.Duration {
+	return msg.duration
 }

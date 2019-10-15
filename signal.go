@@ -12,14 +12,13 @@ import (
 
 // Gracefull shutdown
 type signalHandler struct {
-	sigs            chan os.Signal
+	beforeClose     func()
+	ctx             context.Context
+	logger          *log.Logger
 	shutdownCh      chan bool
 	shutdownTimeout int64 // Seconds
-	beforeClose     func()
-
-	wg     sync.WaitGroup
-	logger *log.Logger
-	ctx    context.Context
+	sigs            chan os.Signal
+	wg              sync.WaitGroup
 }
 
 func newSignalHandler() *signalHandler {

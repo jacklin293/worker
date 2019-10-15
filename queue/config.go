@@ -43,7 +43,7 @@ func (c *Config) Validate() (err error) {
 	return
 }
 
-func (c *Config) GetQueueAttr() ConfigNewer {
+func (c *Config) QueueAttr() ConfigNewer {
 	switch c.QueueType {
 	case "sqs":
 		return &c.sqsConfig
