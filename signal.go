@@ -17,14 +17,14 @@ type signalHandler struct {
 	logger          *log.Logger
 	shutdownCh      chan bool
 	shutdownTimeout int64 // Seconds
-	sigs            chan os.Signal
+	sigCh           chan os.Signal
 	wg              sync.WaitGroup
 }
 
 func newSignalHandler() *signalHandler {
 	ctx := context.Background()
 	return &signalHandler{
-		sigs:       make(chan os.Signal, 1),
+		sigCh:      make(chan os.Signal, 1),
 		shutdownCh: make(chan bool),
 		ctx:        ctx,
 	}
@@ -32,11 +32,11 @@ func newSignalHandler() *signalHandler {
 
 // Capture system signal
 func (s *signalHandler) capture() {
-	signal.Notify(s.sigs, syscall.SIGINT, syscall.SIGTERM) // SIGINT=2, SIGTERM=15
+	signal.Notify(s.sigCh, syscall.SIGINT, syscall.SIGTERM) // SIGINT=2, SIGTERM=15
 	select {
 	case <-s.shutdownCh:
 		s.shutdown()
-	case <-s.sigs:
+	case <-s.sigCh:
 		s.shutdown()
 	}
 }

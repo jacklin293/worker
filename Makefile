@@ -37,3 +37,8 @@ clean:
 	rm *.out *.svg *.pdf worker.test
 build-dev:
 	docker-compose up -d
+suite:
+	make unit
+	make integration
+	make bench
+	make lint

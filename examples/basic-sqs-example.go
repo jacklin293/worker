@@ -36,7 +36,7 @@ func (tj *TestJob) Run(m worker.Messenger) error {
 	fmt.Println("Processing job", m.Payload())
 	return nil
 }
-func (tj *TestJob) Done(j worker.Messenger, err error) {}
+func (tj *TestJob) Done(m worker.Messenger, err error) {}
 
 func main() {
 	// New worker

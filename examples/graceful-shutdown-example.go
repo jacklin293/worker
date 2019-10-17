@@ -88,11 +88,11 @@ func main() {
 func report(h *worker.Handler) {
 	log.Print("Job status: ")
 	for qName, ws := range h.WorkerStatus() {
-		for i, j := range ws {
-			if j == nil {
+		for i, m := range ws {
+			if m == nil {
 				log.Printf("  %s[%d]: (idle)\n", qName, i)
 			} else {
-				log.Printf("  %s[%d]: processing %s\n", qName, i, j.Id())
+				log.Printf("  %s[%d]: processing %s\n", qName, i, m.Id())
 			}
 		}
 	}

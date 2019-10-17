@@ -2,6 +2,8 @@
 
 ## Features
 
+### Architecture
+
 ## Installation
 
 ## Get Started

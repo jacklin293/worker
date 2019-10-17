@@ -22,11 +22,11 @@ type Messenger interface {
 type jobTypeFunc func() Job
 
 type message struct {
-	descriptor descriptor
-	doneAt     time.Time
-	doneChan   chan *message
-	duration   time.Duration
-	receivedAt time.Time
+	descriptor    descriptor
+	doneAt        time.Time
+	doneMessageCh chan *message
+	duration      time.Duration
+	receivedAt    time.Time
 }
 
 type descriptor struct {
@@ -58,7 +58,7 @@ func (msg *message) process(f jobTypeFunc) {
 	j := f()
 	err := j.Run(msg)
 	msg.done(j, err)
-	msg.doneChan <- msg
+	msg.doneMessageCh <- msg
 }
 
 func (msg *message) done(j Job, err error) {

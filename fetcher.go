@@ -19,7 +19,7 @@ func newFetcher() *fetcher {
 	return &fetcher{stopQueueCh: make(chan bool)}
 }
 
-func (f *fetcher) receive(i int64) {
+func (f *fetcher) poll(i int64) {
 	for {
 		// Graceful shutdown
 		select {
@@ -43,7 +43,7 @@ func (f *fetcher) receive(i int64) {
 			}
 			for _, payload := range text.([][]byte) {
 				var msg message
-				if err = f.processMessage(payload, &msg); err != nil {
+				if err = f.dispatch(payload, &msg); err != nil {
 					f.logger.Printf("Error: %s, message: %s\n", err, string(payload))
 				}
 			}
@@ -52,7 +52,7 @@ func (f *fetcher) receive(i int64) {
 				continue
 			}
 			var msg message
-			if err = f.processMessage(text.([]byte), &msg); err != nil {
+			if err = f.dispatch(text.([]byte), &msg); err != nil {
 				f.logger.Printf("Error: %s, message: %s\n", err, string(text.([]byte)))
 			}
 		default:
@@ -62,7 +62,7 @@ func (f *fetcher) receive(i int64) {
 	}
 }
 
-func (f *fetcher) processMessage(payload []byte, msg *message) (err error) {
+func (f *fetcher) dispatch(payload []byte, msg *message) (err error) {
 	if err = json.Unmarshal(payload, &msg.descriptor); err != nil {
 		return
 	}
@@ -75,6 +75,6 @@ func (f *fetcher) processMessage(payload []byte, msg *message) (err error) {
 	}
 	msg.receivedAt = time.Now()
 	f.signalHandler.wg.Add(1)
-	f.worker.receivedChan <- msg
+	f.worker.undoneMessageCh <- msg
 	return
 }

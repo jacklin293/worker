@@ -7,13 +7,13 @@ import (
 )
 
 type worker struct {
-	config       *queue.Config
-	doneChan     chan *message
-	jobTypes     map[string]jobTypeFunc
-	logger       *log.Logger
-	receivedChan chan *message
-	queue        queue.QueueContainer
-	workerStatus *workerStatus
+	config          *queue.Config
+	doneMessageCh   chan *message
+	jobTypes        map[string]jobTypeFunc
+	logger          *log.Logger
+	undoneMessageCh chan *message
+	queue           queue.QueueContainer
+	workerStatus    *workerStatus
 }
 
 type workerStatus struct {
@@ -23,15 +23,15 @@ type workerStatus struct {
 
 func newWorker(concurrency int64) *worker {
 	return &worker{
-		receivedChan: make(chan *message),
-		jobTypes:     make(map[string]jobTypeFunc),
-		workerStatus: &workerStatus{list: make(map[int64]*message, concurrency)},
+		undoneMessageCh: make(chan *message),
+		jobTypes:        make(map[string]jobTypeFunc),
+		workerStatus:    &workerStatus{list: make(map[int64]*message, concurrency)},
 	}
 }
 
-func (w *worker) dispatch(i int64) {
+func (w *worker) receive(i int64) {
 	for {
-		msg := <-w.receivedChan
+		msg := <-w.undoneMessageCh
 		w.process(i, msg)
 	}
 }
@@ -40,11 +40,11 @@ func (w *worker) process(i int64, msg *message) {
 	defer func() {
 		if e := recover(); e != nil {
 			w.logger.Printf("panic: %v, payload: %+v\n", e, msg.descriptor)
-			w.doneChan <- msg
+			w.doneMessageCh <- msg
 		}
 	}()
 
-	msg.doneChan = w.doneChan
+	msg.doneMessageCh = w.doneMessageCh
 
 	w.flagWorkerStatus(true, i, msg)
 	msg.process(w.jobTypes[msg.descriptor.Type])

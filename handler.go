@@ -12,7 +12,7 @@ import (
 // ProjectName
 type Handler struct {
 	config             *config
-	doneChan           chan *message
+	doneMessageCh      chan *message
 	fetchers           map[string][]*fetcher
 	messageDoneCounter int64
 	logger             *log.Logger
@@ -24,7 +24,7 @@ func New() *Handler { // FIXME func should be named as Project name
 	var h Handler
 	h.fetchers = make(map[string][]*fetcher)
 	h.workers = make(map[string]*worker)
-	h.doneChan = make(chan *message)
+	h.doneMessageCh = make(chan *message)
 	h.logger = log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile)
 	h.signalHandler = newSignalHandler()
 	h.signalHandler.beforeClose = h.beforeClose
@@ -97,7 +97,7 @@ func (h *Handler) beforeClose() {
 
 func (h *Handler) newWorker(c *queue.Config) {
 	// New queue
-	q, err := c.QueueAttr().New()
+	q, err := c.QueueConfig().New()
 	if err != nil {
 		h.logger.Fatal("Failed to new queue. Error: ", err)
 	}
@@ -109,7 +109,7 @@ func (h *Handler) newWorker(c *queue.Config) {
 	}
 	w.config = c
 	w.queue = q
-	w.doneChan = h.doneChan
+	w.doneMessageCh = h.doneMessageCh
 	w.logger = h.logger
 }
 
@@ -120,7 +120,7 @@ func (h *Handler) runWorkers(c *queue.Config) {
 		h.logger.Fatal("Please set config before running worker")
 	}
 	for i := int64(0); i < c.WorkerConcurrency; i++ {
-		go w.dispatch(i)
+		go w.receive(i)
 	}
 }
 
@@ -135,20 +135,20 @@ func (h *Handler) newFetcher(c *queue.Config) {
 	}
 }
 
-// Receive messages
+// Poll the queues
 func (h *Handler) runFetchers(c *queue.Config) {
 	fs, ok := h.fetchers[c.Name]
 	if !ok {
 		h.logger.Fatal("Please set config before running worker")
 	}
 	for i, f := range fs {
-		go f.receive(int64(i))
+		go f.poll(int64(i))
 	}
 }
 
 func (h *Handler) done() {
 	for {
-		<-h.doneChan
+		<-h.doneMessageCh
 		h.signalHandler.wg.Done()
 		h.messageDoneCounter++
 	}
@@ -178,13 +178,13 @@ func (h *Handler) WorkerStatus() map[string][]*message {
 	mm := make(map[string][]*message)
 	for name, w := range h.workers {
 		mm[name] = make([]*message, w.config.WorkerConcurrency)
-		w.workerStatus.mutex.RLock()
+		w.workerStatus.mutex.Lock()
 		for i := int64(0); i < w.config.WorkerConcurrency; i++ {
 			if message, ok := w.workerStatus.list[i]; ok {
 				mm[name][i] = message
 			}
 		}
-		w.workerStatus.mutex.RUnlock()
+		w.workerStatus.mutex.Unlock()
 	}
 	return mm
 }

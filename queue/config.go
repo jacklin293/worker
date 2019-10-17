@@ -5,7 +5,7 @@ import (
 	"regexp"
 )
 
-type ConfigNewer interface {
+type QueueConfig interface {
 	validate() error
 	New() (QueueContainer, error)
 }
@@ -43,7 +43,7 @@ func (c *Config) Validate() (err error) {
 	return
 }
 
-func (c *Config) QueueAttr() ConfigNewer {
+func (c *Config) QueueConfig() QueueConfig {
 	switch c.QueueType {
 	case "sqs":
 		return &c.sqsConfig
