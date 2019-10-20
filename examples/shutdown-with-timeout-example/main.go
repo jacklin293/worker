@@ -10,6 +10,7 @@ import (
 // Multiple queues
 var conf = `
 {
+	"shutdown_timeout": 2,
 	"log_enabled": true,
 	"queues": [
 		{
@@ -52,7 +53,7 @@ func main() {
 	// Register job types
 	h.RegisterJobType("queue-1", "test-job-type-1", func() worker.Job { return &TestJob{} })
 	h.RegisterJobType("queue-1", "test-job-type-2", func() worker.Job { return &TestJob{} })
-	h.RegisterJobType("queue-3", "test-job-type-3", func() worker.Job { return &TestJob{} })
+	h.RegisterJobType("queue-2", "test-job-type-3", func() worker.Job { return &TestJob{} })
 
 	// (for demo) Get the queue for enqueuing
 
@@ -64,7 +65,7 @@ func main() {
 				time.Sleep(1 * time.Second)
 				log.Println("Current job done counter: ", h.JobDoneCounter())
 				report(h)
-				log.Println("-------------------------------------------------\n")
+				log.Println("-------------------------------------------------")
 			}
 		}()
 		// (for demo) Enqueue jobs
