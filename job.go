@@ -14,6 +14,7 @@ type Job interface {
 type Messenger interface {
 	Id() string
 	Type() string
+	QueueName() string
 	Payload() interface{}
 	ReceivedAt() time.Time
 	DoneAt() time.Time
