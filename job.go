@@ -1,12 +1,13 @@
 package worker
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
 
 type Job interface {
-	Run(Messenger) error
+	Do(Messenger) error
 	Done(Messenger, error)
 }
 
@@ -19,14 +20,12 @@ type Messenger interface {
 	Duration() time.Duration
 }
 
-type jobTypeFunc func() Job
-
-type message struct {
-	descriptor    descriptor
-	doneAt        time.Time
-	doneMessageCh chan *message
-	duration      time.Duration
-	receivedAt    time.Time
+type Message struct {
+	queueName  string
+	descriptor descriptor
+	receivedAt time.Time
+	doneAt     time.Time
+	duration   time.Duration
 }
 
 type descriptor struct {
@@ -41,7 +40,17 @@ type descriptor struct {
 	Type string `json:"type"`
 }
 
-func (msg *message) validate() (err error) {
+func newMessage(payload []byte) (msg Message, err error) {
+	if err = json.Unmarshal(payload, &msg.descriptor); err != nil {
+		return
+	}
+	if err = msg.validate(); err != nil {
+		return
+	}
+	return
+}
+
+func (msg *Message) validate() (err error) {
 	if msg.descriptor.Id == "" {
 		return fmt.Errorf("Job Id can't be empty")
 	}
@@ -54,39 +63,36 @@ func (msg *message) validate() (err error) {
 	return
 }
 
-func (msg *message) process(f jobTypeFunc) {
-	j := f()
-	err := j.Run(msg)
-	msg.done(j, err)
-	msg.doneMessageCh <- msg
-}
-
-func (msg *message) done(j Job, err error) {
+func (msg *Message) done(j Job, err error) {
 	msg.doneAt = time.Now()
 	msg.duration = msg.doneAt.Sub(msg.receivedAt)
 	j.Done(msg, err)
 }
 
-func (msg *message) Id() string {
+func (msg *Message) Id() string {
 	return msg.descriptor.Id
 }
 
-func (msg *message) Type() string {
+func (msg *Message) Type() string {
 	return msg.descriptor.Type
 }
 
-func (msg *message) Payload() interface{} {
+func (msg *Message) QueueName() string {
+	return msg.queueName
+}
+
+func (msg *Message) Payload() interface{} {
 	return msg.descriptor.Payload
 }
 
-func (msg *message) ReceivedAt() time.Time {
+func (msg *Message) ReceivedAt() time.Time {
 	return msg.receivedAt
 }
 
-func (msg *message) DoneAt() time.Time {
+func (msg *Message) DoneAt() time.Time {
 	return msg.doneAt
 }
 
-func (msg *message) Duration() time.Duration {
+func (msg *Message) Duration() time.Duration {
 	return msg.duration
 }

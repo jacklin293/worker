@@ -1,7 +1,7 @@
 package worker
 
 import (
-	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 	"worker/queue"
@@ -42,17 +42,15 @@ func (f *fetcher) poll(i int64) {
 				continue
 			}
 			for _, payload := range text.([][]byte) {
-				var msg message
-				if err = f.dispatch(payload, &msg); err != nil {
-					f.logger.Printf("Error: %s, message: %s\n", err, string(payload))
+				if err = f.dispatch(payload); err != nil {
+					f.logger.Printf("Error: %s, Message: %s\n", err, string(payload))
 				}
 			}
 		case []byte:
 			if len(text.([]byte)) == 0 {
 				continue
 			}
-			var msg message
-			if err = f.dispatch(text.([]byte), &msg); err != nil {
+			if err = f.dispatch(text.([]byte)); err != nil {
 				f.logger.Printf("Error: %s, message: %s\n", err, string(text.([]byte)))
 			}
 		default:
@@ -62,19 +60,25 @@ func (f *fetcher) poll(i int64) {
 	}
 }
 
-func (f *fetcher) dispatch(payload []byte, msg *message) (err error) {
-	if err = json.Unmarshal(payload, &msg.descriptor); err != nil {
+func (f *fetcher) dispatch(payload []byte) (err error) {
+	msg, err := newMessage(payload)
+	if err != nil {
 		return
 	}
-	if err = msg.validate(); err != nil {
+	if err = f.validate(&msg); err != nil {
 		return
 	}
-	if _, ok := f.worker.jobTypes[msg.descriptor.Type]; !ok {
-		f.logger.Printf("Job type '%s'.'%s' not found\n", f.worker.config.Name, msg.descriptor.Type)
-		return
-	}
+	msg.queueName = f.config.Name
 	msg.receivedAt = time.Now()
 	f.signalHandler.wg.Add(1)
-	f.worker.undoneMessageCh <- msg
+	f.worker.undoneMessageCh <- &msg
 	return
+}
+
+func (f *fetcher) validate(msg *Message) error {
+	// Check if job type has already registered
+	if _, ok := f.worker.jobTypes[msg.descriptor.Type]; !ok {
+		return fmt.Errorf("Job type '%s'.'%s' not registered\n", f.config.Name, msg.descriptor.Type)
+	}
+	return nil
 }

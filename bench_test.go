@@ -26,7 +26,7 @@ var goChannelConfig = `
 
 type GoChannel struct{}
 
-func (tj *GoChannel) Run(m Messenger) error       { return nil }
+func (tj *GoChannel) Do(m Messenger) error        { return nil }
 func (tj *GoChannel) Done(m Messenger, err error) {}
 
 func BenchmarkGoChannel(b *testing.B) {

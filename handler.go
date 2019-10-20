@@ -12,11 +12,11 @@ import (
 // ProjectName
 type Handler struct {
 	config             *config
-	doneMessageCh      chan *message
-	fetchers           map[string][]*fetcher
-	messageDoneCounter int64
 	logger             *log.Logger
+	doneMessageCh      chan *Message
+	messageDoneCounter int64
 	signalHandler      *signalHandler
+	fetchers           map[string][]*fetcher
 	workers            map[string]*worker
 }
 
@@ -24,7 +24,7 @@ func New() *Handler { // FIXME func should be named as Project name
 	var h Handler
 	h.fetchers = make(map[string][]*fetcher)
 	h.workers = make(map[string]*worker)
-	h.doneMessageCh = make(chan *message)
+	h.doneMessageCh = make(chan *Message)
 	h.logger = log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile)
 	h.signalHandler = newSignalHandler()
 	h.signalHandler.beforeClose = h.beforeClose
@@ -155,15 +155,15 @@ func (h *Handler) done() {
 }
 
 // New job type
-func (h *Handler) RegisterJobType(name string, jobType string, f jobTypeFunc) {
-	if name == "" || jobType == "" || f == nil {
+func (h *Handler) RegisterJobType(name string, jobType string, j func() Job) {
+	if name == "" || jobType == "" || j == nil {
 		h.logger.Fatal("Either queue name, job type or func is empty")
 	}
 	// Prevent panic from not being in the list of config
 	if _, ok := h.workers[name]; !ok {
 		return
 	}
-	h.workers[name].jobTypes[jobType] = f
+	h.workers[name].jobTypes[jobType] = j
 }
 
 func (h *Handler) FetcherNum() map[string]int {
@@ -174,10 +174,10 @@ func (h *Handler) FetcherNum() map[string]int {
 	return mm
 }
 
-func (h *Handler) WorkerStatus() map[string][]*message {
-	mm := make(map[string][]*message)
+func (h *Handler) WorkerStatus() map[string][]*Message {
+	mm := make(map[string][]*Message)
 	for name, w := range h.workers {
-		mm[name] = make([]*message, w.config.WorkerConcurrency)
+		mm[name] = make([]*Message, w.config.WorkerConcurrency)
 		w.workerStatus.mutex.Lock()
 		for i := int64(0); i < w.config.WorkerConcurrency; i++ {
 			if message, ok := w.workerStatus.list[i]; ok {

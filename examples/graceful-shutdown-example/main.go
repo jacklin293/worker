@@ -38,7 +38,7 @@ var conf = `
 // Implementation of job type
 type TestJob struct{}
 
-func (tj *TestJob) Run(m worker.Messenger) error {
+func (tj *TestJob) Do(m worker.Messenger) error {
 	time.Sleep(3 * time.Second)
 	return nil
 }

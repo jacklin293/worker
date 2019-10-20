@@ -17,5 +17,5 @@ func TestCase1(t *testing.T) {
 
 	// Mock message
 	mock := &mockMsg{}
-	tj.Run(mock)
+	tj.Do(mock)
 }

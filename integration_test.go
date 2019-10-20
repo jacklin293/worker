@@ -96,19 +96,19 @@ func getMessage(id string, jobType string, payload interface{}) []byte {
 
 // ------------------------------------------------------------------
 
-// Test run
-type Run struct{ returnCh chan string }
+// Test Do
+type Do struct{ returnCh chan string }
 
-func (jt *Run) Run(m Messenger) error       { jt.returnCh <- m.Payload().(string); return nil }
-func (jt *Run) Done(m Messenger, err error) {}
+func (jt *Do) Do(m Messenger) error        { jt.returnCh <- m.Payload().(string); return nil }
+func (jt *Do) Done(m Messenger, err error) {}
 
-func TestRun(t *testing.T) {
+func TestDo(t *testing.T) {
 	t.Parallel()
 	returnCh := make(chan string)
 
 	h := New()
 	h.SetConfig(goChannelConfig)
-	h.RegisterJobType("queue-1", "test-job-type-1", func() Job { return &Run{returnCh: returnCh} })
+	h.RegisterJobType("queue-1", "test-job-type-1", func() Job { return &Do{returnCh: returnCh} })
 	q, _ := h.Queue("queue-1")
 	go h.Run()
 	q.Send(getMessage("id-1", "test-job-type-1", "foo"))
@@ -117,13 +117,13 @@ func TestRun(t *testing.T) {
 
 // ------------------------------------------------------------------
 
-// Test done
+// Test Done
 type Done struct {
 	result   string
 	returnCh chan string
 }
 
-func (jt *Done) Run(m Messenger) error       { jt.result = m.Payload().(string); return nil }
+func (jt *Done) Do(m Messenger) error        { jt.result = m.Payload().(string); return nil }
 func (jt *Done) Done(m Messenger, err error) { jt.returnCh <- jt.result }
 
 func TestDone(t *testing.T) {
@@ -142,10 +142,10 @@ func TestDone(t *testing.T) {
 
 // ------------------------------------------------------------------
 
-// Test err
+// Test error
 type Err struct{ returnCh chan string }
 
-func (jt *Err) Run(m Messenger) error       { return errors.New("error") }
+func (jt *Err) Do(m Messenger) error        { return errors.New("error") }
 func (jt *Err) Done(m Messenger, err error) { jt.returnCh <- err.Error() }
 
 func TestErr(t *testing.T) {
@@ -164,9 +164,9 @@ func TestErr(t *testing.T) {
 
 // ------------------------------------------------------------------
 
-type JobStructRun struct{ returnCh chan interface{} }
+type JobStructDo struct{ returnCh chan interface{} }
 
-func (jt *JobStructRun) Run(m Messenger) error {
+func (jt *JobStructDo) Do(m Messenger) error {
 	jt.returnCh <- m.Id()
 	jt.returnCh <- m.Type()
 	jt.returnCh <- m.Payload()
@@ -175,15 +175,15 @@ func (jt *JobStructRun) Run(m Messenger) error {
 	jt.returnCh <- m.Duration()
 	return nil
 }
-func (jt *JobStructRun) Done(m Messenger, err error) {}
+func (jt *JobStructDo) Done(m Messenger, err error) {}
 
-func TestJobStructRun(t *testing.T) {
+func TestJobStructDo(t *testing.T) {
 	t.Parallel()
 	returnCh := make(chan interface{})
 
 	h := New()
 	h.SetConfig(goChannelConfig)
-	h.RegisterJobType("queue-1", "test-job-type-1", func() Job { return &JobStructRun{returnCh: returnCh} })
+	h.RegisterJobType("queue-1", "test-job-type-1", func() Job { return &JobStructDo{returnCh: returnCh} })
 	q, err := h.Queue("queue-1")
 	if err != nil {
 		t.Log(err)
@@ -209,7 +209,7 @@ func TestJobStructRun(t *testing.T) {
 
 type JobStructDone struct{ returnCh chan interface{} }
 
-func (jt *JobStructDone) Run(m Messenger) error { jt.returnCh <- m.Payload(); return nil }
+func (jt *JobStructDone) Do(m Messenger) error { jt.returnCh <- m.Payload(); return nil }
 func (jt *JobStructDone) Done(m Messenger, err error) {
 	jt.returnCh <- m.Id()
 	jt.returnCh <- m.Type()
@@ -239,8 +239,8 @@ func TestJobStructDone(t *testing.T) {
 	json.Unmarshal(payload, &job)
 
 	// Test case of job payload using map
-	payloadRun := <-returnCh
-	assert.Equal(t, job["payload"], payloadRun)
+	payloadDo := <-returnCh
+	assert.Equal(t, job["payload"], payloadDo)
 
 	id := <-returnCh
 	assert.Equal(t, job["id"], id)
@@ -258,27 +258,27 @@ func TestJobStructDone(t *testing.T) {
 
 // ------------------------------------------------------------------
 
-// Test pointer of job type (run)
-type PointerJobTypeRun struct {
+// Test pointer of job type (do)
+type PointerJobTypeDo struct {
 	result   string `json:"result"`
 	returnCh chan string
 }
 
-func (jt *PointerJobTypeRun) Run(m Messenger) error {
+func (jt *PointerJobTypeDo) Do(m Messenger) error {
 	jt.result = m.Payload().(map[string]interface{})["result"].(string)
 	time.Sleep(300 * time.Millisecond)
 	jt.returnCh <- jt.result
 	return nil
 }
-func (jt *PointerJobTypeRun) Done(m Messenger, err error) {}
+func (jt *PointerJobTypeDo) Done(m Messenger, err error) {}
 
-func TestPointerJobTypeRun(t *testing.T) {
+func TestPointerJobTypeDo(t *testing.T) {
 	t.Parallel()
 	returnCh := make(chan string)
 
 	h := New()
 	h.SetConfig(goChannelConfig)
-	h.RegisterJobType("queue-1", "test-job-type-1", func() Job { return &PointerJobTypeRun{returnCh: returnCh} })
+	h.RegisterJobType("queue-1", "test-job-type-1", func() Job { return &PointerJobTypeDo{returnCh: returnCh} })
 	q, _ := h.Queue("queue-1")
 	go h.Run()
 
@@ -299,7 +299,7 @@ type PointerJobTypeDone struct {
 	returnCh chan string
 }
 
-func (jt *PointerJobTypeDone) Run(m Messenger) error {
+func (jt *PointerJobTypeDone) Do(m Messenger) error {
 	jt.result = m.Payload().(map[string]interface{})["result"].(string)
 	time.Sleep(300 * time.Millisecond)
 	return nil
@@ -333,7 +333,7 @@ type PointerJobTypeCustom struct {
 	returnCh chan string
 }
 
-func (jt *PointerJobTypeCustom) Run(m Messenger) error {
+func (jt *PointerJobTypeCustom) Do(m Messenger) error {
 	jt.result = m.Payload().(map[string]interface{})["result"].(string)
 	time.Sleep(300 * time.Millisecond)
 	jt.Custom()
@@ -369,7 +369,7 @@ type PointerJobTypeDoneCustom struct {
 	returnCh chan string
 }
 
-func (jt *PointerJobTypeDoneCustom) Run(m Messenger) error {
+func (jt *PointerJobTypeDoneCustom) Do(m Messenger) error {
 	jt.result = m.Payload().(map[string]interface{})["result"].(string)
 	time.Sleep(300 * time.Millisecond)
 	return nil
@@ -401,23 +401,23 @@ func TestPointerJobTypeDoneCustom(t *testing.T) {
 
 // ------------------------------------------------------------------
 
-// Test pointer of job descriptor (run)
-type PointerJobDescriptorRun struct{ returnCh chan string }
+// Test pointer of job descriptor (do)
+type PointerJobDescriptorDo struct{ returnCh chan string }
 
-func (jt *PointerJobDescriptorRun) Run(m Messenger) error {
+func (jt *PointerJobDescriptorDo) Do(m Messenger) error {
 	time.Sleep(300 * time.Millisecond)
 	jt.returnCh <- m.Payload().(string)
 	return nil
 }
-func (jt *PointerJobDescriptorRun) Done(m Messenger, err error) {}
+func (jt *PointerJobDescriptorDo) Done(m Messenger, err error) {}
 
-func TestPointerJobDescriptorRun(t *testing.T) {
+func TestPointerJobDescriptorDo(t *testing.T) {
 	t.Parallel()
 	returnCh := make(chan string)
 
 	h := New()
 	h.SetConfig(goChannelConfig)
-	h.RegisterJobType("queue-1", "test-job-type-1", func() Job { return &PointerJobDescriptorRun{returnCh: returnCh} })
+	h.RegisterJobType("queue-1", "test-job-type-1", func() Job { return &PointerJobDescriptorDo{returnCh: returnCh} })
 	q, _ := h.Queue("queue-1")
 	go h.Run()
 
@@ -435,7 +435,7 @@ func TestPointerJobDescriptorRun(t *testing.T) {
 // Test pointer of job descriptor (done)
 type PointerJobDescriptorDone struct{ returnCh chan string }
 
-func (jt *PointerJobDescriptorDone) Run(m Messenger) error {
+func (jt *PointerJobDescriptorDone) Do(m Messenger) error {
 	time.Sleep(300 * time.Millisecond)
 	return nil
 }
@@ -464,7 +464,7 @@ func TestPointerJobDescriptorDone(t *testing.T) {
 
 type Q1J1JobType struct{ returnCh chan string }
 
-func (jt *Q1J1JobType) Run(m Messenger) error       { jt.returnCh <- m.Payload().(string); return nil }
+func (jt *Q1J1JobType) Do(m Messenger) error        { jt.returnCh <- m.Payload().(string); return nil }
 func (jt *Q1J1JobType) Done(m Messenger, err error) {}
 
 // Test 1 queue and 1 job type
@@ -492,7 +492,7 @@ func Test1Queue1JobType(t *testing.T) {
 // Test 1 queue and 2 job types
 type Q1J2JobType1 struct{ returnCh chan string }
 
-func (jt *Q1J2JobType1) Run(m Messenger) error {
+func (jt *Q1J2JobType1) Do(m Messenger) error {
 	time.Sleep(300 * time.Millisecond)
 	jt.returnCh <- m.Payload().(string)
 	return nil
@@ -501,7 +501,7 @@ func (jt *Q1J2JobType1) Done(m Messenger, err error) {}
 
 type Q1J2JobType2 struct{ returnCh chan string }
 
-func (jt *Q1J2JobType2) Run(m Messenger) error {
+func (jt *Q1J2JobType2) Do(m Messenger) error {
 	time.Sleep(300 * time.Millisecond)
 	jt.returnCh <- m.Payload().(string)
 	return nil
@@ -534,7 +534,7 @@ func Test1Queue2JobTypes(t *testing.T) {
 // Test 2 queues and 1 job type
 type Q2J1JobType struct{ returnCh chan string }
 
-func (jt *Q2J1JobType) Run(m Messenger) error {
+func (jt *Q2J1JobType) Do(m Messenger) error {
 	time.Sleep(300 * time.Millisecond)
 	jt.returnCh <- m.Payload().(string)
 	return nil
@@ -569,7 +569,7 @@ func Test2Queues1JobType(t *testing.T) {
 // Test 2 queues and 2 job type
 type Q2J2JobType1 struct{ returnCh chan string }
 
-func (jt *Q2J2JobType1) Run(m Messenger) error {
+func (jt *Q2J2JobType1) Do(m Messenger) error {
 	time.Sleep(300 * time.Millisecond)
 	jt.returnCh <- m.Payload().(string)
 	return nil
@@ -579,7 +579,7 @@ func (jt *Q2J2JobType1) Done(m Messenger, err error) {}
 
 type Q2J2JobType2 struct{ returnCh chan string }
 
-func (jt *Q2J2JobType2) Run(m Messenger) error {
+func (jt *Q2J2JobType2) Do(m Messenger) error {
 	time.Sleep(300 * time.Millisecond)
 	jt.returnCh <- m.Payload().(string)
 	return nil
@@ -611,17 +611,17 @@ func Test2Queues2JobTypes(t *testing.T) {
 
 // ------------------------------------------------------------------
 
-// Test panic in Run
-type PanicRun struct{}
+// Test panic in Do
+type PanicDo struct{}
 
-func (jt *PanicRun) Run(m Messenger) error       { panic("panic in Run"); return nil }
-func (jt *PanicRun) Done(m Messenger, err error) {}
+func (jt *PanicDo) Do(m Messenger) error        { panic("panic in Do()"); return nil }
+func (jt *PanicDo) Done(m Messenger, err error) {}
 
-func TestPanicRun(t *testing.T) {
+func TestPanicDo(t *testing.T) {
 	t.Parallel()
 	h := New()
 	h.SetConfig(goChannelConfig)
-	h.RegisterJobType("queue-1", "test-job-type-1", func() Job { return &PanicRun{} })
+	h.RegisterJobType("queue-1", "test-job-type-1", func() Job { return &PanicDo{} })
 	q, _ := h.Queue("queue-1")
 	go func() {
 		q.Send(getMessage("id-1", "test-job-type-1", "foo"))
@@ -637,8 +637,8 @@ func TestPanicRun(t *testing.T) {
 // Test panic in Done
 type PanicDone struct{}
 
-func (jt *PanicDone) Run(m Messenger) error       { return nil }
-func (jt *PanicDone) Done(m Messenger, err error) { panic("panic in Done") }
+func (jt *PanicDone) Do(m Messenger) error        { return nil }
+func (jt *PanicDone) Done(m Messenger, err error) { panic("panic in Done()") }
 
 func TestPanicDone(t *testing.T) {
 	t.Parallel()
@@ -660,9 +660,9 @@ func TestPanicDone(t *testing.T) {
 // Test panic in Custom func
 type PanicCustom struct{}
 
-func (jt *PanicCustom) Run(m Messenger) error       { return nil }
+func (jt *PanicCustom) Do(m Messenger) error        { return nil }
 func (jt *PanicCustom) Done(m Messenger, err error) { jt.Custom() }
-func (jt *PanicCustom) Custom()                     { panic("panic in Custom") }
+func (jt *PanicCustom) Custom()                     { panic("panic in Custom()") }
 
 func TestPanicCustom(t *testing.T) {
 	t.Parallel()
@@ -684,7 +684,7 @@ func TestPanicCustom(t *testing.T) {
 // Test go_channel
 type GoChannel100Jobs struct{}
 
-func (jt *GoChannel100Jobs) Run(m Messenger) error       { return nil }
+func (jt *GoChannel100Jobs) Do(m Messenger) error        { return nil }
 func (jt *GoChannel100Jobs) Done(m Messenger, err error) {}
 
 func TestGoChannel100Jobs(t *testing.T) {
@@ -712,7 +712,7 @@ func TestGoChannel100Jobs(t *testing.T) {
 // Test SQS
 type Sqs100Jobs struct{}
 
-func (jt *Sqs100Jobs) Run(m Messenger) error       { return nil }
+func (jt *Sqs100Jobs) Do(m Messenger) error        { return nil }
 func (jt *Sqs100Jobs) Done(m Messenger, err error) {}
 
 func TestSqs100Jobs(t *testing.T) {
@@ -739,7 +739,7 @@ func TestSqs100Jobs(t *testing.T) {
 // Test sync.WaitGroup with 50k jobs
 type SyncWaitGroup struct{}
 
-func (jt *SyncWaitGroup) Run(m Messenger) error       { return nil }
+func (jt *SyncWaitGroup) Do(m Messenger) error        { return nil }
 func (jt *SyncWaitGroup) Done(m Messenger, err error) {}
 
 func TestSyncWaitGroup(t *testing.T) {
@@ -766,7 +766,7 @@ func TestSyncWaitGroup(t *testing.T) {
 
 type GracefulShutdown struct{}
 
-func (jt *GracefulShutdown) Run(m Messenger) error       { time.Sleep(2 * time.Second); return nil }
+func (jt *GracefulShutdown) Do(m Messenger) error        { time.Sleep(2 * time.Second); return nil }
 func (jt *GracefulShutdown) Done(m Messenger, err error) {}
 
 func TestGracefulShutdown(t *testing.T) {
@@ -797,7 +797,7 @@ func TestGracefulShutdown(t *testing.T) {
 
 type ShutdownWithTimeout struct{}
 
-func (jt *ShutdownWithTimeout) Run(m Messenger) error       { time.Sleep(10 * time.Second); return nil }
+func (jt *ShutdownWithTimeout) Do(m Messenger) error        { time.Sleep(10 * time.Second); return nil }
 func (jt *ShutdownWithTimeout) Done(m Messenger, err error) {}
 
 func TestShutdownWithTimeout(t *testing.T) {
