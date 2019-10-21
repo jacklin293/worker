@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -94,8 +95,6 @@ func getMessage(id string, jobType string, payload interface{}) []byte {
 	return json
 }
 
-// ------------------------------------------------------------------
-
 // Test Do
 type Do struct{ returnCh chan string }
 
@@ -114,8 +113,6 @@ func TestDo(t *testing.T) {
 	q.Send(getMessage("id-1", "test-job-type-1", "foo"))
 	assert.Equal(t, "foo", <-returnCh)
 }
-
-// ------------------------------------------------------------------
 
 // Test Done
 type Done struct {
@@ -140,8 +137,6 @@ func TestDone(t *testing.T) {
 	assert.Equal(t, "foo", <-returnCh)
 }
 
-// ------------------------------------------------------------------
-
 // Test error
 type Err struct{ returnCh chan string }
 
@@ -161,8 +156,6 @@ func TestErr(t *testing.T) {
 	q.Send(getMessage("id-1", "test-job-type-1", "foo"))
 	assert.Equal(t, "error", <-returnCh)
 }
-
-// ------------------------------------------------------------------
 
 type JobStructDo struct{ returnCh chan interface{} }
 
@@ -204,8 +197,6 @@ func TestJobStructDo(t *testing.T) {
 	duration := <-returnCh
 	assert.Equal(t, "0s", duration.(time.Duration).String())
 }
-
-// ------------------------------------------------------------------
 
 type JobStructDone struct{ returnCh chan interface{} }
 
@@ -256,8 +247,6 @@ func TestJobStructDone(t *testing.T) {
 	assert.NotEqual(t, "0s", duration.(time.Duration).String())
 }
 
-// ------------------------------------------------------------------
-
 // Test pointer of job type (do)
 type PointerJobTypeDo struct {
 	result   string `json:"result"`
@@ -291,8 +280,6 @@ func TestPointerJobTypeDo(t *testing.T) {
 	assert.Equal(t, expected2, <-returnCh)
 }
 
-// ------------------------------------------------------------------
-
 // Test pointer of job type (done)
 type PointerJobTypeDone struct {
 	result   string `json:"result"`
@@ -324,8 +311,6 @@ func TestPointerJobTypeDone(t *testing.T) {
 	assert.Equal(t, expected1, <-returnCh)
 	assert.Equal(t, expected2, <-returnCh)
 }
-
-// ------------------------------------------------------------------
 
 // Test pointer of job struct (custom)
 type PointerJobTypeCustom struct {
@@ -360,8 +345,6 @@ func TestPointerJobTypeCustom(t *testing.T) {
 	assert.Equal(t, expected1, <-returnCh)
 	assert.Equal(t, expected2, <-returnCh)
 }
-
-// ------------------------------------------------------------------
 
 // Test pointer of job struct (done->custom)
 type PointerJobTypeDoneCustom struct {
@@ -399,8 +382,6 @@ func TestPointerJobTypeDoneCustom(t *testing.T) {
 	assert.Equal(t, expected2+"/done", <-returnCh)
 }
 
-// ------------------------------------------------------------------
-
 // Test pointer of job descriptor (do)
 type PointerJobDescriptorDo struct{ returnCh chan string }
 
@@ -430,8 +411,6 @@ func TestPointerJobDescriptorDo(t *testing.T) {
 	assert.Equal(t, expected2, <-returnCh)
 }
 
-// ------------------------------------------------------------------
-
 // Test pointer of job descriptor (done)
 type PointerJobDescriptorDone struct{ returnCh chan string }
 
@@ -460,8 +439,6 @@ func TestPointerJobDescriptorDone(t *testing.T) {
 	assert.Equal(t, expected2, <-returnCh)
 }
 
-// ------------------------------------------------------------------
-
 type Q1J1JobType struct{ returnCh chan string }
 
 func (jt *Q1J1JobType) Do(m Messenger) error        { jt.returnCh <- m.Payload().(string); return nil }
@@ -486,8 +463,6 @@ func Test1Queue1JobType(t *testing.T) {
 	assert.Equal(t, expected1, <-returnCh)
 	assert.Equal(t, expected2, <-returnCh)
 }
-
-// ------------------------------------------------------------------
 
 // Test 1 queue and 2 job types
 type Q1J2JobType1 struct{ returnCh chan string }
@@ -529,8 +504,6 @@ func Test1Queue2JobTypes(t *testing.T) {
 	assert.Equal(t, expected2, <-returnCh2)
 }
 
-// ------------------------------------------------------------------
-
 // Test 2 queues and 1 job type
 type Q2J1JobType struct{ returnCh chan string }
 
@@ -563,8 +536,6 @@ func Test2Queues1JobType(t *testing.T) {
 	assert.Equal(t, expected1, <-returnCh1)
 	assert.Equal(t, expected2, <-returnCh2)
 }
-
-// ------------------------------------------------------------------
 
 // Test 2 queues and 2 job type
 type Q2J2JobType1 struct{ returnCh chan string }
@@ -609,8 +580,6 @@ func Test2Queues2JobTypes(t *testing.T) {
 	assert.Equal(t, expected2, <-returnCh2)
 }
 
-// ------------------------------------------------------------------
-
 // Test panic in Do
 type PanicDo struct{}
 
@@ -625,14 +594,12 @@ func TestPanicDo(t *testing.T) {
 	q, _ := h.Queue("queue-1")
 	go func() {
 		q.Send(getMessage("id-1", "test-job-type-1", "foo"))
-		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the message.
+		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the messages.
 		h.Shutdown()
 	}()
 	h.Run()
 	assert.Equal(t, int64(1), h.JobDoneCounter())
 }
-
-// ------------------------------------------------------------------
 
 // Test panic in Done
 type PanicDone struct{}
@@ -648,14 +615,12 @@ func TestPanicDone(t *testing.T) {
 	q, _ := h.Queue("queue-1")
 	go func() {
 		q.Send(getMessage("id-1", "test-job-type-1", "foo"))
-		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the message.
+		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the messages.
 		h.Shutdown()
 	}()
 	h.Run()
 	assert.Equal(t, int64(1), h.JobDoneCounter())
 }
-
-// ------------------------------------------------------------------
 
 // Test panic in Custom func
 type PanicCustom struct{}
@@ -672,14 +637,12 @@ func TestPanicCustom(t *testing.T) {
 	q, _ := h.Queue("queue-1")
 	go func() {
 		q.Send(getMessage("id-1", "test-job-type-1", "foo"))
-		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the message.
+		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the messages.
 		h.Shutdown()
 	}()
 	h.Run()
 	assert.Equal(t, int64(1), h.JobDoneCounter())
 }
-
-// ------------------------------------------------------------------
 
 // Test go_channel
 type GoChannel100Jobs struct{}
@@ -699,15 +662,13 @@ func TestGoChannel100Jobs(t *testing.T) {
 		for i := int64(0); i < total; i++ {
 			q.Send(getMessage("id-1", "test-job-type-1", strconv.FormatInt(i, 10)))
 		}
-		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the message.
+		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the messages.
 		h.Shutdown()
 	}()
 	h.Run()
 	assert.Equal(t, total, h.JobDoneCounter())
 	t.Logf("counter/total: %d/%d\n", h.JobDoneCounter(), total)
 }
-
-// ------------------------------------------------------------------
 
 // Test SQS
 type Sqs100Jobs struct{}
@@ -726,7 +687,7 @@ func TestSqs100Jobs(t *testing.T) {
 		for i := int64(0); i < total; i++ {
 			q.Send([][]byte{getMessage("id-1", "test-job-type-1", strconv.FormatInt(i, 10))})
 		}
-		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the message.
+		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the messages.
 		h.Shutdown()
 	}()
 	h.Run()
@@ -734,9 +695,7 @@ func TestSqs100Jobs(t *testing.T) {
 	t.Logf("counter/total: %d/%d\n", h.JobDoneCounter(), total)
 }
 
-// ------------------------------------------------------------------
-
-// Test sync.WaitGroup with 50k jobs
+// Test sync.WaitGroup
 type SyncWaitGroup struct{}
 
 func (jt *SyncWaitGroup) Do(m Messenger) error        { return nil }
@@ -749,20 +708,18 @@ func TestSyncWaitGroup(t *testing.T) {
 	h.RegisterJobType("queue-1", "test-job-type-1", func() Job { return &SyncWaitGroup{} })
 	q, _ := h.Queue("queue-1")
 
-	total := int64(50000)
+	total := int64(1000)
 	go func(total int64) {
 		for i := int64(0); i < total; i++ {
 			q.Send(getMessage("id-1", "test-job-type-1", strconv.FormatInt(i, 10)))
 		}
-		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the message.
+		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the messages.
 		h.Shutdown()
 	}(total)
 	h.Run()
 	assert.Equal(t, total, h.JobDoneCounter())
 	t.Logf("counter/total: %d/%d\n", h.JobDoneCounter(), total)
 }
-
-// ------------------------------------------------------------------
 
 type GracefulShutdown struct{}
 
@@ -781,7 +738,7 @@ func TestGracefulShutdown(t *testing.T) {
 		for i := int64(0); i < total; i++ {
 			q.Send(getMessage("id-1", "test-job-type-1", strconv.FormatInt(i, 10)))
 		}
-		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the message.
+		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the messages.
 		h.Shutdown()
 	}(total)
 	start := time.Now()
@@ -792,8 +749,6 @@ func TestGracefulShutdown(t *testing.T) {
 	assert.WithinDuration(t, start, end, 2200*time.Millisecond) // 2s Jobing time + 100ms sleep + 100ms launching time
 	assert.Equal(t, int64(3), h.JobDoneCounter())
 }
-
-// ------------------------------------------------------------------
 
 type ShutdownWithTimeout struct{}
 
@@ -812,7 +767,7 @@ func TestShutdownWithTimeout(t *testing.T) {
 		for i := int64(0); i < total; i++ {
 			q.Send(getMessage("id-1", "test-job-type-1", strconv.FormatInt(i, 10)))
 		}
-		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the message.
+		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the messages.
 		h.Shutdown()
 	}(total)
 	start := time.Now()
@@ -824,4 +779,42 @@ func TestShutdownWithTimeout(t *testing.T) {
 	assert.Equal(t, int64(0), h.JobDoneCounter())
 }
 
-// ------------------------------------------------------------------
+type Unique struct {
+	table *map[int64]bool
+	mutex *sync.Mutex
+}
+
+func (jt *Unique) Do(m Messenger) error {
+	jt.mutex.Lock()
+	defer jt.mutex.Unlock()
+	delete(*jt.table, int64(m.Payload().(float64)))
+	return nil
+}
+func (jt *Unique) Done(m Messenger, err error) {}
+
+func TestUnique(t *testing.T) {
+	mutex := &sync.Mutex{}
+	total := int64(10000)
+	table := map[int64]bool{}
+	for i := int64(0); i < total; i++ {
+		table[i] = true
+	}
+
+	t.Parallel()
+	h := New()
+	h.SetConfig(goChannelConfig)
+	h.RegisterJobType("queue-1", "test-job-type-1", func() Job { return &Unique{table: &table, mutex: mutex} })
+	q, _ := h.Queue("queue-1")
+
+	go func(total int64) {
+		for i := int64(0); i < total; i++ {
+			go q.Send(getMessage("id-1", "test-job-type-1", i))
+		}
+		time.Sleep(100 * time.Millisecond) // Give the worker some time to receive the messages.
+		h.Shutdown()
+	}(total)
+	h.Run()
+	assert.Equal(t, total, h.JobDoneCounter())
+	assert.Equal(t, 0, len(table))
+	t.Logf("counter/total: %d/%d\n", h.JobDoneCounter(), total)
+}
