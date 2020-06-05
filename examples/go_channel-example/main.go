@@ -40,7 +40,7 @@ func main() {
 	h.SetConfig(conf)
 
 	// Register job type
-	h.RegisterJobType("queue-1", "test-job-type-1", func() worker.Job { return &TestJob{} })
+	h.RegisterJobType("queue-1", "test-job-type-1", func() worker.JobDone { return &TestJob{} })
 
 	total := int64(10)
 	go func(total int64) {

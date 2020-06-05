@@ -155,7 +155,7 @@ func (h *Handler) done() {
 }
 
 // New job type
-func (h *Handler) RegisterJobType(name string, jobType string, j func() Job) {
+func (h *Handler) RegisterJobType(name string, jobType string, j interface{}) {
 	if name == "" || jobType == "" || j == nil {
 		h.logger.Fatal("Either queue name, job type or func is empty")
 	}

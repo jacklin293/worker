@@ -9,7 +9,7 @@ import (
 type worker struct {
 	config          *queue.Config
 	logger          *log.Logger
-	jobTypes        map[string]func() Job
+	jobTypes        map[string]interface{}
 	queue           queue.QueueContainer
 	workerStatus    *workerStatus
 	doneMessageCh   chan *Message
@@ -24,7 +24,7 @@ type workerStatus struct {
 func newWorker(concurrency int64) *worker {
 	return &worker{
 		undoneMessageCh: make(chan *Message),
-		jobTypes:        make(map[string]func() Job),
+		jobTypes:        make(map[string]interface{}),
 		workerStatus:    &workerStatus{list: make(map[int64]*Message, concurrency)},
 	}
 }
@@ -46,9 +46,17 @@ func (w *worker) process(i int64, msg *Message) {
 
 	// New job type, then do the job
 	w.flagWorkerStatus(true, i, msg)
-	j := w.jobTypes[msg.descriptor.Type]()
-	err := j.Do(msg)
-	msg.done(j, err)
+	switch fn := w.jobTypes[msg.descriptor.Type].(type) {
+	case func() Job:
+		j := fn()
+		j.Do(msg)
+		msg.done()
+	case func() JobDone:
+		j := fn()
+		err := j.Do(msg)
+		msg.done()
+		j.Done(msg, err)
+	}
 	w.doneMessageCh <- msg
 	w.flagWorkerStatus(false, i, msg)
 }

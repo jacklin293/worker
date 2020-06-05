@@ -8,6 +8,16 @@ import (
 
 type Job interface {
 	Do(Messenger) error
+}
+
+type JobDone interface {
+	Job
+	Done(Messenger, error)
+}
+
+type JobWithInitDone interface {
+	Job
+	Init(Messenger) error
 	Done(Messenger, error)
 }
 
@@ -64,10 +74,9 @@ func (msg *Message) validate() (err error) {
 	return
 }
 
-func (msg *Message) done(j Job, err error) {
+func (msg *Message) done() {
 	msg.doneAt = time.Now()
 	msg.duration = msg.doneAt.Sub(msg.receivedAt)
-	j.Done(msg, err)
 }
 
 func (msg *Message) Id() string {
