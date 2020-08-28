@@ -123,15 +123,24 @@ func (s *SQS) Receive() (interface{}, error) {
 	messages := make([][]byte, 0, len(resp.Messages))
 	receipts := make([]string, 0, len(resp.Messages))
 	for _, msg := range resp.Messages {
+		// TODO Create dedicated type for sqs message, a struct contains 2 field - message, receipt
+		// TODO Return this type here
+		// TODO fetcher.poll() should pass message and receipt to newMessage in dispatch()
+		// TODO Add fields queueType and receipt to Message, assign them during newMessage
+		// TODO msg <-h.doneMessageCh
+		// TODO h.workers[msg.queueName].queue.Delete([]string{msg.receipt})
 		messages = append(messages, []byte(*msg.Body))
 		receipts = append(receipts, *msg.ReceiptHandle)
 	}
+
+	// TODO Put Delete() into done() in handler
 	if len(receipts) > 0 {
 		_, err = s.Delete(receipts)
 	}
 	return messages, err
 }
 
+// TODO Use DeleteMessage(
 func (s *SQS) Delete(receipts []string) (*sqs.DeleteMessageBatchOutput, error) {
 	entries := make([]*sqs.DeleteMessageBatchRequestEntry, len(receipts))
 	for i, receipt := range receipts {

@@ -35,6 +35,10 @@ func (ch *GoChannel) Receive() (interface{}, error) {
 	return <-ch.ch, nil
 }
 
+func (ch *GoChannel) Delete(interface{}) (interface{}, error) {
+	return true, nil
+}
+
 func (ch *GoChannel) Len() int {
 	return len(ch.ch)
 }
