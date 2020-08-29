@@ -25,22 +25,39 @@ var conf = `
 	]
 }`
 
+type DB interface {
+	GetConn() string
+}
+
+type MySQL struct{}
+
+func (m *MySQL) GetConn() string {
+	return "Conn 1"
+}
+
 // Implementation of job type
-type TestJob struct{}
+type TestJob struct {
+	mysql DB
+}
 
 func (tj *TestJob) Do(m worker.Messenger) error {
 	fmt.Println("Processing job", m.Payload())
+	fmt.Println("Conn: ", tj.mysql.GetConn())
 	return nil
 }
 func (tj *TestJob) Done(m worker.Messenger, err error) {}
 
 func main() {
+	var mysql *MySQL
+
 	// New worker
 	h := worker.New()
 	h.SetConfig(conf)
 
 	// Register job type
-	h.RegisterJobType("queue-1", "test-job-type-1", func() worker.Job { return &TestJob{} })
+	h.RegisterJobType("queue-1", "test-job-type-1", func() worker.Job {
+		return &TestJob{mysql: mysql}
+	})
 
 	total := int64(10)
 	go func(total int64) {
