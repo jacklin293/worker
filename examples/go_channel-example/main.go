@@ -29,7 +29,7 @@ var conf = `
 type TestJob struct{}
 
 func (tj *TestJob) Do(m worker.Messenger) error {
-	fmt.Println("Processing job", m.Payload())
+	fmt.Println("Your message: ", m.Payload())
 	return nil
 }
 func (tj *TestJob) Done(m worker.Messenger, err error) {}

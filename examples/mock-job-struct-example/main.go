@@ -14,29 +14,30 @@ var conf = `
 	"queues": [
 		{
 			"name":"queue-1",
-			"queue_type":"sqs",
-			"queue_concurrency":2,
-			"worker_concurrency": 2,
+			"queue_type":"go_channel",
+			"queue_concurrency": 3,
+			"worker_concurrency":4,
 			"enabled":true,
-			"sqs":{
-				"queue_url":"http://localhost:4100/100010001000/integration-test",
-				"use_local_sqs": true,
-				"region":"us-east-1",
-				"max_number_of_messages": 1,
-				"wait_time_seconds": 5
+			"go_channel": {
+				"size": 0
 			}
 		}
 	]
 }`
 
-// Implementation of job type
-type TestJob struct{}
+// You Job
+type YourJob struct{}
 
-func (tj *TestJob) Do(m worker.Messenger) error {
-	fmt.Println("Your message: ", m.Payload())
+func (yj *YourJob) Do(m worker.Messenger) error {
+	fmt.Println("Your message:", yj.Custom())
 	return nil
 }
-func (tj *TestJob) Done(m worker.Messenger, err error) {}
+
+func (yj *YourJob) Done(m worker.Messenger, err error) {}
+
+func (yj *YourJob) Custom() string {
+	return "Custom"
+}
 
 func main() {
 	// New worker
@@ -44,14 +45,16 @@ func main() {
 	h.SetConfig(conf)
 
 	// Register job type
-	h.RegisterJobType("queue-1", "test-job-type-1", func() worker.Job { return &TestJob{} })
+	h.RegisterJobType("queue-1", "test-job-type-1", func() worker.Job {
+		return &YourJob{}
+	})
 
 	total := int64(10)
 	go func(total int64) {
 		// (for demo) Enqueue jobs
 		q, _ := h.Queue("queue-1")
 		for i := int64(0); i < total; i++ {
-			q.Send([][]byte{[]byte(fmt.Sprintf(`{"id":"id-%d","type":"test-job-type-1","payload":"%d"}`, i, i))})
+			q.Send([]byte(fmt.Sprintf(`{"id":"id-%d","type":"test-job-type-1","payload":"%d"}`, i, i)))
 		}
 
 		// (for demo) Wait for a bit

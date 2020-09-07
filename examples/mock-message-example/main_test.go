@@ -5,29 +5,17 @@ import (
 	"worker"
 )
 
-type MockMySQL struct{}
-
-func (m *MockMySQL) GetConn() string {
-	return "Fack Conn"
-}
-
 // Mock message
-// inherit methods from another struct
 type mockMsg struct {
 	worker.Message
 }
 
-// override the payload method
 func (m *mockMsg) Payload() interface{} {
 	return "FOO"
 }
 
 func TestCase1(t *testing.T) {
-	var mysql *MockMySQL
-
-	tj := &TestJob{
-		mysql: mysql,
-	}
+	tj := &YourJob{}
 
 	// Mock message
 	mock := &mockMsg{}
